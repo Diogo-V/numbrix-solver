@@ -26,6 +26,9 @@ class NumbrixState:
 
 class Board:
     """ Representação interna de um tabuleiro de Numbrix. """
+
+    def __init__(self, init_matrix: list[list[int]]):
+        self.matrix = init_matrix
     
     def get_number(self, row: int, col: int) -> int:
         """ Devolve o valor na respetiva posição do tabuleiro. """
@@ -49,6 +52,15 @@ class Board:
         """ Lê o ficheiro cujo caminho é passado como argumento e retorna
         uma instância da classe Board. """
         # TODO
+
+        with open(filename, encoding="utf-8") as f:
+
+            # Gets column and row sizes
+            n = int(f.readline())
+
+            for i in range(n):
+                pass
+
         pass
 
     # TODO: outros metodos da classe
@@ -90,9 +102,19 @@ class Numbrix(Problem):
 
 
 if __name__ == "__main__":
+
     # TODO:
+
     # Ler o ficheiro de input de sys.argv[1],
-    # Usar uma técnica de procura para resolver a instância,
-    # Retirar a solução a partir do nó resultante,
-    # Imprimir para o standard output no formato indicado.
-    pass
+    if len(sys.argv) == 2:
+
+        # Creates game board
+        board = Board.parse_instance(sys.argv[1])
+
+        # Usar uma técnica de procura para resolver a instância,
+        # Retirar a solução a partir do nó resultante,
+        # Imprimir para o standard output no formato indicado.
+        pass
+
+    else:
+        print("Invalid number of arguments. Only needs a path to be passed!")
