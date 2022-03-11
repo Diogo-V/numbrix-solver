@@ -1,0 +1,15 @@
+Objetivo do projeto:
+    1º: ler a instancia de um ficheiro
+    2º: Alterar as classes do board e do numbrix (podemos implementar outros métodos que precisemos)
+
+Procura:
+    Procura cega não quer saber de outros estados
+    Procura informada  (A*) e/ou uma greedy e tem em conta a profudidade e euristicas (acrescenta um "h" ao valor dos ramos da arvore)
+    O greedy não quer saber do peso do ramo. Só usa a euristica
+    Estamos no estado inicial e geramos vários estados
+
+
+Notas:
+    Temos uma classe abstrata no search.py que temos de alterar os 4 métodos dela (actions, result, goal_test, h)
+    result -> recebe um estado e uma action e devolve um estado com a nova ação (temos de fazer uma deepcopy para não quebrar o estado)
+    goal_test -> método que recebe um estado e dá true ou false caso vá de acordo com objetivo (usamos procura informada)
