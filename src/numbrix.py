@@ -48,20 +48,16 @@ class Board:
         pass
     
     @staticmethod    
-    def parse_instance(filename: str):
+    def parse_instance(filename: str) -> list[list[int]]:
         """ Lê o ficheiro cujo caminho é passado como argumento e retorna
         uma instância da classe Board. """
-        # TODO
-
         with open(filename, encoding="utf-8") as f:
 
             # Gets column and row sizes
             n = int(f.readline())
 
-            for i in range(n):
-                pass
-
-        pass
+            # Puts rest of the lines in a matrix to represents the board
+            return [[int(word) for word in f.readline().split() if word.isdigit()] for _ in range(n)]
 
     # TODO: outros metodos da classe
 
@@ -108,7 +104,7 @@ if __name__ == "__main__":
     # Ler o ficheiro de input de sys.argv[1],
     if len(sys.argv) == 2:
 
-        # Creates game board
+        # Creates matrix that represents game board
         board = Board.parse_instance(sys.argv[1])
 
         # Usar uma técnica de procura para resolver a instância,
