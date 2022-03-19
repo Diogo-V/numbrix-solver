@@ -2,9 +2,9 @@
 # Devem alterar as classes e funções neste ficheiro de acordo com as instruções do enunciado.
 # Além das funções e classes já definidas, podem acrescentar outras que considerem pertinentes.
 
-# Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# Grupo 06:
+# 95555 Diogo Venâncio
+# 95675 Sofia Morgado
 
 import sys
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
@@ -21,13 +21,12 @@ class NumbrixState:
     def __lt__(self, other):
         return self.id < other.id
         
-    # TODO: outros metodos da classe
-
 
 class Board:
     """ Representação interna de um tabuleiro de Numbrix. """
 
     def __init__(self, init_matrix: list[list[int]]):
+        self.n = len(init_matrix)
         self.matrix = init_matrix
     
     def get_number(self, row: int, col: int) -> int:
@@ -37,13 +36,30 @@ class Board:
     def adjacent_vertical_numbers(self, row: int, col: int) -> (int, int):
         """ Devolve os valores imediatamente abaixo e acima, 
         respectivamente. """
-        pass
+        result = ()
+        try:
+            result += (self.matrix[row + 1][col], )
+        except IndexError:
+            result += (None, )
+        try:
+            result += (self.matrix[row - 1][col], )
+        except IndexError:
+            result += (None, )
+        return result
 
     def adjacent_horizontal_numbers(self, row: int, col: int) -> (int, int):
         """ Devolve os valores imediatamente à esquerda e à direita, 
         respectivamente. """
-        # TODO
-        pass
+        result = ()
+        try:
+            result += (self.matrix[row][col - 1], )
+        except IndexError:
+            result += (None, )
+        try:
+            result += (self.matrix[row][col + 1], )
+        except IndexError:
+            result += (None, )
+        return result
     
     @staticmethod    
     def parse_instance(filename: str) -> list[list[int]]:
@@ -56,8 +72,6 @@ class Board:
 
             # Puts rest of the lines in a matrix to represents the board
             return [[int(word) for word in f.readline().split() if word.isdigit()] for _ in range(n)]
-
-    # TODO: outros metodos da classe
 
 
 class Numbrix(Problem):
@@ -92,18 +106,14 @@ class Numbrix(Problem):
         # TODO
         pass
     
-    # TODO: outros metodos da classe
-
 
 if __name__ == "__main__":
-
-    # TODO:
 
     # Ler o ficheiro de input de sys.argv[1],
     if len(sys.argv) == 2:
 
         # Creates matrix that represents game board
-        board = Board.parse_instance(sys.argv[1])
+        board = Board(Board.parse_instance(sys.argv[1]))
 
         # Usar uma técnica de procura para resolver a instância,
         # Retirar a solução a partir do nó resultante,
