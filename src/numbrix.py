@@ -10,6 +10,24 @@ import sys
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
 
+class Action:
+    """Encapsulates action representation."""
+
+    def __init__(self, row, column, number):
+        self.row = row
+        self.column = column
+        self.number = number
+
+    def get_row(self):
+        return self.row
+
+    def get_column(self):
+        return self.column
+
+    def get_number(self):
+        return self.number
+
+
 class NumbrixState:
     state_id = 0
 
@@ -75,10 +93,11 @@ class Board:
 
 
 class Numbrix(Problem):
+
     def __init__(self, board: Board):
         """ O construtor especifica o estado inicial. """
+        self.board = board
         # TODO
-        pass
 
     def actions(self, state: NumbrixState):
         """ Retorna uma lista de ações que podem ser executadas a
