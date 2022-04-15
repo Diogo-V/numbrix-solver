@@ -241,7 +241,8 @@ class Numbrix(Problem):
                 if val == left + 1 or val == left - 1:
                     total += total_to_be_added
                     total_to_be_added *= 2
-                    col -= 1continue
+                    col -= 1
+                    continue
 
             if right is not None and right != 0 and right not in visited:
                 if val == right + 1 or val == right - 1:
