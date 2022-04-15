@@ -22,7 +22,7 @@ class NumbrixState:
 
     def __lt__(self, other):
         return self.id < other.id
-        
+
 
 class Board:
     """Numbrix board representation."""
@@ -36,7 +36,7 @@ class Board:
     def get_board(self) -> list[list[int]]:
         """Returns a matrix representation"""
         return self.matrix
-    
+
     def get_number(self, row: int, col: int) -> int:
         """Returns number in requested position."""
         return self.matrix[row][col]
@@ -74,8 +74,8 @@ class Board:
     def get_available_board_values(self) -> list[int]:
         """Returns a list with the currently not being used possible values for this board."""
         return [val for val in range(1, self.max_value + 1) if val not in [j for sub in self.matrix for j in sub]]
-    
-    @staticmethod    
+
+    @staticmethod
     def parse_instance(filename: str) -> list[list[int]]:
         """Reads input file and returns a valid instance of the board class."""
         with open(filename, encoding="utf-8") as f:
@@ -101,6 +101,18 @@ class Numbrix(Problem):
     def get_position_valid_values(self, state: NumbrixState, row: int, col: int) -> list[int]:
         """Returns a list of integers which represent the values that can be put in the input coordinates."""
 
+        def is_valid(val1, up1, down1, left1, right1):
+            if val1 != up1 and val1 != down1 and val1 != left1 and val1 != right1:
+                if up1 is not None and (val1 == up1 + 1 or val1 == up1 - 1):
+                    return True
+                if down1 is not None and (val1 == down1 + 1 or val1 == down1 - 1):
+                    return True
+                if left1 is not None and (val1 == left1 + 1 or val1 == left1 - 1):
+                    return True
+                if right1 is not None and (val1 == right1 + 1 or val1 == right1 - 1):
+                    return True
+                return False
+
         result = []
 
         # Gets restriction values adjacent to the currently being evaluated position
@@ -110,7 +122,7 @@ class Numbrix(Problem):
         # Goes over all the possible values for this board and appends the value if it satisfies the
         # restrictions
         for val in state.board.get_available_board_values():
-            if val != up and val != down and val != left and val != right:
+            if is_valid(val, up, down, left, right):
                 result.append(val)
 
         return result
@@ -194,15 +206,35 @@ class Numbrix(Problem):
         #       -> Dar mais pontos à medida que vai formando um caminho
         #       -> Somar linhas/colunas ??? (ideia do stor)
 
-        # All nodes get a +1 value from their heuristic function
-        total = 1
+        def check_opposite_side(val1, up1, down1, left1, right1, already_checked):
+            if up1 is not None and up1 != 0 and up1 not in visited and up1 != already_checked:
+                if val1 == up1 + 1 or val1 == up1 - 1:
+                    return up1, row - 1, col
+
+            if down1 is not None and down1 != 0 and down1 not in visited and down1 != already_checked:
+                if val1 == down1 + 1 or val1 == down1 - 1:
+                    return down1, row + 1, col
+
+            if left1 is not None and left1 != 0 and left1 not in visited and left1 != already_checked:
+                if val1 == left1 + 1 or val1 == left1 - 1:
+                    return left1, row, col - 1
+
+            if right1 is not None and right1 != 0 and right1 not in visited and right1 != already_checked:
+                if val1 == right1 + 1 or val1 == right1 - 1:
+                    return right1, row, col + 1
+
+            return ()
+
+        # All nodes are initialized with a very big number. This is done because we want to prioritize lower heuristic
+        # values over bigger ones
+        total = 1000000000
 
         # We initialize our loop condition a true to be able to find a path
         found_path = True
 
-        # This value is going to be used to "reward" a good path. Each time we find a path, this value is doubled. This
-        # allows us to be able to "reward" longer paths
-        total_to_be_added = 2
+        # This value is going to be used to "reward" a good path. Each time we find a path, this value is used to
+        # subtract from the total amount. This allows us to be able to "reward" longer paths
+        reward = 2
 
         # Holds list of visited values (used to not repeat already visited positions)
         visited = []
@@ -214,6 +246,17 @@ class Numbrix(Problem):
         # Gets action that is going to be taken on this node and unpacks it to get the adjacent nodes
         row, col, val = node.action
 
+        # Holds iteration value
+        current_val = val
+
+        # Checks if we are seeing a value in the middle of a path and if so, we need to store the other side's info and
+        # proceed to the opposite one
+        has_opposite = False
+        iteration = 0
+        opp_val = -1
+        opp_row = -1
+        opp_col = -1
+
         while found_path:
 
             # Gets adjacent values
@@ -224,38 +267,72 @@ class Numbrix(Problem):
             # and if so, we update the current value and double the next score if we can find even more nodes that form
             # a path
             if up is not None and up != 0 and up not in visited:
-                if val == up + 1 or val == up - 1:
-                    total += total_to_be_added
-                    total_to_be_added *= 2
+                if current_val == up + 1 or current_val == up - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, up) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
                     row -= 1
+                    visited.append(current_val)
+                    current_val = up
                     continue
 
             if down is not None and down != 0 and down not in visited:
-                if val == down + 1 or val == down - 1:
-                    total += total_to_be_added
-                    total_to_be_added *= 2
+                if current_val == down + 1 or current_val == down - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, down) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
                     row += 1
+                    visited.append(current_val)
+                    current_val = down
                     continue
 
             if left is not None and left != 0 and left not in visited:
-                if val == left + 1 or val == left - 1:
-                    total += total_to_be_added
-                    total_to_be_added *= 2
+                if current_val == left + 1 or current_val == left - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, left) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
                     col -= 1
+                    visited.append(current_val)
+                    current_val = left
                     continue
 
             if right is not None and right != 0 and right not in visited:
-                if val == right + 1 or val == right - 1:
-                    total += total_to_be_added
-                    total_to_be_added *= 2
+                if current_val == right + 1 or current_val == right - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, right) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
                     col += 1
+                    visited.append(current_val)
+                    current_val = right
                     continue
+
+            if has_opposite:  # Checks if we had more to the other side
+                current_val = opp_val
+                row = opp_row
+                col = opp_col
+                continue
 
             # In case no valid path is found, then we stop this loop and return the total accumulated heuristic value
             found_path = False
 
         return total
-    
+
 
 if __name__ == "__main__":
 
@@ -268,10 +345,7 @@ if __name__ == "__main__":
         # Initializes Numbrix problem
         numbrix = Numbrix(board)
 
-        print("A*: \n", astar_search(numbrix, display=True))
-
-        # Prints solution in the stdout
-        print(board.get_result())
+        print(astar_search(numbrix, display=True).state.board.get_result())
 
     else:
         print("Invalid number of arguments. Only needs a path to be passed!")
