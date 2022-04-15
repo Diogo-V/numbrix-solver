@@ -7,6 +7,8 @@
 # 95675 Sofia Morgado
 
 import sys
+from typing import Tuple
+
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
 
@@ -27,6 +29,9 @@ class Action:
     def get_number(self):
         return self.number
 
+    def to_tuple(self):
+        return self.row, self.column, self.number
+
 
 class NumbrixState:
     state_id = 0
@@ -41,19 +46,23 @@ class NumbrixState:
         
 
 class Board:
-    """ Representação interna de um tabuleiro de Numbrix. """
+    """Numbrix board representation."""
 
     def __init__(self, init_matrix: list[list[int]]):
         self.n = len(init_matrix)
+        self.max_value = self.n * self.n
         self.matrix = init_matrix
     
     def get_number(self, row: int, col: int) -> int:
-        """ Devolve o valor na respetiva posição do tabuleiro. """
+        """Returns number in requested position."""
         return self.matrix[row][col]
 
-    def adjacent_vertical_numbers(self, row: int, col: int) -> (int, int):
-        """ Devolve os valores imediatamente abaixo e acima, 
-        respectivamente. """
+    def set_number(self, row: int, col: int, val: int) -> None:
+        """Changes number in row and col to the input val."""
+        self.matrix[row][col] = val
+
+    def adjacent_vertical_numbers(self, row: int, col: int) -> tuple:
+        """Returns values in upper and lower positions, respectively."""
         result = ()
         try:
             result += (self.matrix[row + 1][col], )
@@ -65,9 +74,8 @@ class Board:
             result += (None, )
         return result
 
-    def adjacent_horizontal_numbers(self, row: int, col: int) -> (int, int):
-        """ Devolve os valores imediatamente à esquerda e à direita, 
-        respectivamente. """
+    def adjacent_horizontal_numbers(self, row: int, col: int) -> tuple:
+        """ Returns values to the left and to right, respectively."""
         result = ()
         try:
             result += (self.matrix[row][col - 1], )
@@ -78,11 +86,14 @@ class Board:
         except IndexError:
             result += (None, )
         return result
+
+    def get_available_board_values(self) -> list[int]:
+        """Returns a list with the currently not being used possible values for this board."""
+        return [val for val in range(1, self.max_value + 1) if val not in [j for sub in self.matrix for j in sub]]
     
     @staticmethod    
     def parse_instance(filename: str) -> list[list[int]]:
-        """ Lê o ficheiro cujo caminho é passado como argumento e retorna
-        uma instância da classe Board. """
+        """Reads input file and returns a valid instance of the board class."""
         with open(filename, encoding="utf-8") as f:
 
             # Gets column and row sizes
@@ -91,53 +102,111 @@ class Board:
             # Puts rest of the lines in a matrix to represents the board
             return [[int(word) for word in f.readline().split() if word.isdigit()] for _ in range(n)]
 
+    def get_result(self) -> str:
+        """Outputs a string representation of this board"""
+        return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)]) + "\n"
+
 
 class Numbrix(Problem):
 
     def __init__(self, board: Board):
-        """ O construtor especifica o estado inicial. """
+        """Specifies initial state of the board."""
+        super().__init__(initial=NumbrixState(board))
         self.board = board
-        # TODO
+        self.available = self.board.get_available_board_values()
 
-    def actions(self, state: NumbrixState):
-        """ Retorna uma lista de ações que podem ser executadas a
-        partir do estado passado como argumento. """
-        # TODO
-        pass
+    def actions(self, state: NumbrixState) -> list[Action]:
+        """Returns a list of actions that can be done on the input state."""
 
-    def result(self, state: NumbrixState, action):
-        """ Retorna o estado resultante de executar a 'action' sobre
-        'state' passado como argumento. A ação a executar deve ser uma
-        das presentes na lista obtida pela execução de 
-        self.actions(state). """
-        # TODO
-        pass
+        result = []
 
-    def goal_test(self, state: NumbrixState):
-        """ Retorna True se e só se o estado passado como argumento é
-        um estado objetivo. Deve verificar se todas as posições do tabuleiro 
-        estão preenchidas com uma sequência de números adjacentes. """
-        # TODO
-        pass
+        # Goes over each element in the
+        for i in range(self.board.n):
+            for j in range(self.board.n):
+
+                # Checks if this position is not already filled
+                if self.board.get_number(i, j) == 0:
+
+                    # Gets restriction values adjacent to the currently being evaluated position
+                    up, down = self.board.adjacent_vertical_numbers(i, j)
+                    left, right = self.board.adjacent_horizontal_numbers(i, j)
+
+                    # Goes over all the possible values for this board and appends the value if it satisfies the
+                    # restrictions
+                    for val in self.available:
+                        if val != up and val != down and val != left and val != right:
+                            result.append(Action(i, j, val))
+
+        return result
+
+    def result(self, state: NumbrixState, action: Action) -> NumbrixState:
+        """Returns the resulting state of applying the input action (result from self.action(state)) to
+        the current state."""
+
+        # Removes value from list of available values for this board
+        self.available.remove(action[2])
+
+        # Changes board value to the requested action and returns it
+        self.board.set_number(*action.to_tuple())
+        return NumbrixState(self.board)
+
+    def goal_test(self, state: NumbrixState) -> bool:
+        """Checks if we have a valid solution of this game-"""
+
+        # Stores the start of this board (number one)
+        row, col = 0, 0
+
+        # Finds row and column where the solution starts (finds value=1)
+        for i in range(self.board.n):
+            for j in range(self.board.n):
+                if self.board.get_number(i, j) == 1:
+                    row, col = i, j
+
+        # Tries to go through the solution's path and check whether it is valid or not
+        val = 1
+        while val < self.board.max_value:
+
+            # Gets adjacent values to discover where is the next value located
+            up, down = self.board.adjacent_vertical_numbers(row, col)
+            left, right = self.board.adjacent_horizontal_numbers(row, col)
+
+            # Tries to see where is the next position
+            if up == self.board.get_number(row, col) + 1:
+                row -= 1
+            elif down == self.board.get_number(row, col) + 1:
+                row += 1
+            elif left == self.board.get_number(row, col) + 1:
+                col -= 1
+            elif right == self.board.get_number(row, col) + 1:
+                col += 1
+            else:
+                return False  # In this case, we were not able to find a suitable path and so, this is not a solution
+
+            val += 1
+
+        return True
 
     def h(self, node: Node):
-        """ Função heuristica utilizada para a procura A*. """
+        """Heuristic function used in A*"""
         # TODO
         pass
     
 
 if __name__ == "__main__":
 
-    # Ler o ficheiro de input de sys.argv[1],
+    # Reads input file
     if len(sys.argv) == 2:
 
         # Creates matrix that represents game board
         board = Board(Board.parse_instance(sys.argv[1]))
 
-        # Usar uma técnica de procura para resolver a instância,
-        # Retirar a solução a partir do nó resultante,
-        # Imprimir para o standard output no formato indicado.
-        pass
+        # Initializes Numbrix problem
+        numbrix = Numbrix(board)
+
+        print("A*: \n", astar_search(numbrix))
+
+        # Prints solution in the stdout
+        print(board.get_result())
 
     else:
         print("Invalid number of arguments. Only needs a path to be passed!")
