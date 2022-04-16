@@ -347,7 +347,7 @@ if __name__ == "__main__":
         # Initializes Numbrix problem
         numbrix = Numbrix(board)
 
-        print(astar_search(numbrix, display=True).state.board.get_result())
+        print(astar_search(numbrix).state.board.get_result())
 
     else:
         print("Invalid number of arguments. Only needs a path to be passed!")
