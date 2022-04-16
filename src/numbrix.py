@@ -326,6 +326,9 @@ class Numbrix(Problem):
                 current_val = opp_val
                 row = opp_row
                 col = opp_col
+                total -= reward
+                reward *= 2
+                has_opposite = False
                 continue
 
             # In case no valid path is found, then we stop this loop and return the total accumulated heuristic value
