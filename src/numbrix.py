@@ -7,7 +7,6 @@
 # 95675 Sofia Morgado
 import copy
 import sys
-from typing import Tuple
 
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
@@ -27,25 +26,25 @@ class NumbrixState:
 class Board:
     """Numbrix board representation."""
 
-    def __init__(self, init_matrix: list[list[int]]):
+    def __init__(self, init_matrix):
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
         self.available = self.get_available_board_values()
 
-    def get_board(self) -> list[list[int]]:
+    def get_board(self):
         """Returns a matrix representation"""
         return self.matrix
 
-    def get_number(self, row: int, col: int) -> int:
+    def get_number(self, row, col):
         """Returns number in requested position."""
         return self.matrix[row][col]
 
-    def set_number(self, row: int, col: int, val: int) -> None:
+    def set_number(self, row, col, val):
         """Changes number in row and col to the input val."""
         self.matrix[row][col] = val
 
-    def adjacent_vertical_numbers(self, row: int, col: int) -> tuple:
+    def adjacent_vertical_numbers(self, row, col):
         """Returns values in upper and lower positions, respectively."""
         result = ()
         if row == 0:
@@ -58,7 +57,7 @@ class Board:
             result += (self.matrix[row + 1][col],)
         return result
 
-    def adjacent_horizontal_numbers(self, row: int, col: int) -> tuple:
+    def adjacent_horizontal_numbers(self, row, col):
         """ Returns values to the left and to right, respectively."""
         result = ()
         if col == 0:
@@ -71,12 +70,12 @@ class Board:
             result += (self.matrix[row][col + 1], )
         return result
 
-    def get_available_board_values(self) -> list[int]:
+    def get_available_board_values(self):
         """Returns a list with the currently not being used possible values for this board."""
         return [val for val in range(1, self.max_value + 1) if val not in [j for sub in self.matrix for j in sub]]
 
     @staticmethod
-    def parse_instance(filename: str) -> list[list[int]]:
+    def parse_instance(filename):
         """Reads input file and returns a valid instance of the board class."""
         with open(filename, encoding="utf-8") as f:
 
@@ -86,19 +85,19 @@ class Board:
             # Puts rest of the lines in a matrix to represents the board
             return [[int(word) for word in f.readline().split() if word.isdigit()] for _ in range(n)]
 
-    def get_result(self) -> str:
+    def get_result(self):
         """Outputs a string representation of this board"""
         return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)]) + "\n"
 
 
 class Numbrix(Problem):
 
-    def __init__(self, board: Board):
+    def __init__(self, board):
         """Specifies initial state of the board."""
         super().__init__(initial=NumbrixState(board))
         self.board = board
 
-    def get_position_valid_values(self, state: NumbrixState, row: int, col: int) -> list[int]:
+    def get_position_valid_values(self, state, row, col):
         """Returns a list of integers which represent the values that can be put in the input coordinates."""
 
         def is_valid(val1, up1, down1, left1, right1):
@@ -127,7 +126,7 @@ class Numbrix(Problem):
 
         return result
 
-    def actions(self, state: NumbrixState) -> list[tuple[int, int, int]]:
+    def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
         result = []
@@ -148,7 +147,7 @@ class Numbrix(Problem):
 
         return result
 
-    def result(self, state: NumbrixState, action: tuple[int, int, int]) -> NumbrixState:
+    def result(self, state, action):
         """Returns the resulting state of applying the input action (result from self.action(state)) to
         the current state."""
 
@@ -163,7 +162,7 @@ class Numbrix(Problem):
         new_state.board.available.remove(action[2])
         return NumbrixState(new_state.board)
 
-    def goal_test(self, state: NumbrixState) -> bool:
+    def goal_test(self, state):
         """Checks if we have a valid solution of this game-"""
 
         # Stores the start of this board (number one)
@@ -199,7 +198,7 @@ class Numbrix(Problem):
 
         return True
 
-    def h(self, node: Node):
+    def h(self, node):
         """Heuristic function used in A*"""
         # TODO: ideas
         #       -> Ver se o valor que está ao meu lado é +/- 1 que eu e dar mais pontos
