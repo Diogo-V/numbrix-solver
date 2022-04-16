@@ -87,7 +87,7 @@ class Board:
 
     def get_result(self):
         """Outputs a string representation of this board"""
-        return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)])
+        return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)]) + "\n"
 
 
 class Numbrix(Problem):
@@ -338,16 +338,14 @@ class Numbrix(Problem):
 
 if __name__ == "__main__":
 
-    # Reads input file
-    if len(sys.argv) == 2:
+    # Creates matrix that represents game board from input file
+    board = Board(Board.parse_instance(sys.argv[1]))
 
-        # Creates matrix that represents game board
-        board = Board(Board.parse_instance(sys.argv[1]))
+    # Initializes Numbrix problem
+    numbrix = Numbrix(board)
 
-        # Initializes Numbrix problem
-        numbrix = Numbrix(board)
+    # Applies our search algorithm to find the correct solution
+    result = astar_search(numbrix).state.board.get_result()
 
-        print(astar_search(numbrix).state.board.get_result())
-
-    else:
-        print("Invalid number of arguments. Only needs a path to be passed!")
+    # Shows result in stdin
+    print(result, end="")
