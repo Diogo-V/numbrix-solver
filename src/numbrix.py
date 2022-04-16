@@ -87,7 +87,7 @@ class Board:
 
     def get_result(self):
         """Outputs a string representation of this board"""
-        return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)]) + "\n"
+        return "\n".join(["\t".join([str(self.get_number(i, j)) for j in range(self.n)]) for i in range(self.n)])
 
 
 class Numbrix(Problem):
