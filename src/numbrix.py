@@ -30,7 +30,6 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
-        self.available = [i for i in range(1, self.max_value + 1)]
         self.inserted = self.build_matrix_structs()
 
     def build_matrix_structs(self):
@@ -43,7 +42,6 @@ class Board:
             for j in range(self.n):
                 val = self.get_number(i, j)
                 if val != 0:
-                    self.available.remove(val)
                     result[val] = (i, j)
 
         return result
@@ -109,53 +107,33 @@ class Numbrix(Problem):
         super().__init__(initial=NumbrixState(board))
         self.board = board
 
-    def get_position_valid_values(self, state, row, col):
-        """Returns a list of integers which represent the values that can be put in the input coordinates."""
-
-        def is_valid(val1, up1, down1, left1, right1):
-            if val1 != up1 and val1 != down1 and val1 != left1 and val1 != right1:
-                if up1 is not None and (val1 == up1 + 1 or val1 == up1 - 1):
-                    return True
-                if down1 is not None and (val1 == down1 + 1 or val1 == down1 - 1):
-                    return True
-                if left1 is not None and (val1 == left1 + 1 or val1 == left1 - 1):
-                    return True
-                if right1 is not None and (val1 == right1 + 1 or val1 == right1 - 1):
-                    return True
-                return False
-
-        result = []
-
-        # Gets restriction values adjacent to the currently being evaluated position
-        up, down = state.board.adjacent_vertical_numbers(row, col)
-        left, right = state.board.adjacent_horizontal_numbers(row, col)
-
-        # Goes over all the possible values for this board and appends the value if it satisfies the
-        # restrictions
-        for val in state.board.get_available_board_values():
-            if is_valid(val, up, down, left, right):
-                result.append(val)
-
-        return result
-
     def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
         result = []
 
-        # Goes over each element in the board
-        for i in range(state.board.n):
-            for j in range(state.board.n):
+        # Iterates over all the inserted items and returns the possible action for each one of them
+        for key, (row, col) in state.board.inserted.items():
 
-                # Checks if this position is not already filled
-                if state.board.get_number(i, j) == 0:
+            # Gets restriction values adjacent to the currently being evaluated position
+            up, down = state.board.adjacent_vertical_numbers(row, col)
+            left, right = state.board.adjacent_horizontal_numbers(row, col)
 
-                    # Get values that can be put in this position
-                    values = self.get_position_valid_values(state, i, j)
+            # Gets available adjacent values
+            available = [i for i in [key + 1, key - 1] if i not in state.board.inserted]
 
-                    # Appends possible actions for this position
-                    for val in values:
-                        result.append((i, j, val))
+            # Iterates over the possible adjacent values and appends possible actions to the result list
+            for val in available:
+
+                # We need to check if our adjacency is an empty position before appending the action
+                if up == 0:
+                    result.append((row - 1, col, val))
+                if down == 0:
+                    result.append((row + 1, col, val))
+                if left == 0:
+                    result.append((row, col - 1, val))
+                if right == 0:
+                    result.append((row, col + 1, val))
 
         return result
 
@@ -164,12 +142,11 @@ class Numbrix(Problem):
         the current state."""
         new_state = copy.deepcopy(state)
         new_state.board.set_number(*action)
-        new_state.board.available.remove(action[2])
         return NumbrixState(new_state.board)
 
     def goal_test(self, state):
         """Checks if we have a valid solution of this game-"""
-        return len(state.board.available) == 0
+        return len(state.board.inserted) == state.board.max_value
 
     def h(self, node):
         """Heuristic function used in A*"""
@@ -177,6 +154,8 @@ class Numbrix(Problem):
         #       -> Ver se o valor que está ao meu lado é +/- 1 que eu e dar mais pontos
         #       -> Dar mais pontos à medida que vai formando um caminho (Muito lento)
         #       -> Somar linhas/colunas ??? (ideia do stor)
+        #       -> Modelo epidemiológico?
+        #       -> Calculo de distancias entre valores?
         return 1
 
 
