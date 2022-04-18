@@ -30,7 +30,23 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
-        self.available = self.get_available_board_values()
+        self.available = [i for i in range(1, self.max_value + 1)]
+        self.inserted = self.build_matrix_structs()
+
+    def build_matrix_structs(self):
+        """Builds a list of available values and a dictionary with the values already there + their coordinates."""
+
+        result = {}
+
+        # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
+        for i in range(self.n):
+            for j in range(self.n):
+                val = self.get_number(i, j)
+                if val != 0:
+                    self.available.remove(val)
+                    result[val] = (i, j)
+
+        return result
 
     def get_board(self):
         """Returns a matrix representation"""
@@ -69,10 +85,6 @@ class Board:
         else:
             result += (self.matrix[row][col + 1], )
         return result
-
-    def get_available_board_values(self):
-        """Returns a list with the currently not being used possible values for this board."""
-        return [val for val in range(1, self.max_value + 1) if val not in [j for sub in self.matrix for j in sub]]
 
     @staticmethod
     def parse_instance(filename):
