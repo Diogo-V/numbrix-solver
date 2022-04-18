@@ -131,7 +131,7 @@ class Numbrix(Problem):
 
         result = []
 
-        # Goes over each element in the
+        # Goes over each element in the board
         for i in range(state.board.n):
             for j in range(state.board.n):
 
@@ -150,13 +150,6 @@ class Numbrix(Problem):
     def result(self, state, action):
         """Returns the resulting state of applying the input action (result from self.action(state)) to
         the current state."""
-
-        # Removes value from list of available values for this board
-        # self.available.remove(action[2])  TODO: decide what to do with this
-
-        # Changes board value to the requested action and returns it
-        # new_board = copy.deepcopy(self.board)  TODO: make sure it is not this
-        # new_board.set_number(*action)
         new_state = copy.deepcopy(state)
         new_state.board.set_number(*action)
         new_state.board.available.remove(action[2])
