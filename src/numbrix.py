@@ -30,10 +30,11 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
-        self.inserted = self.build_matrix_structs()
+        self.inserted, self.not_visited, self.visited = self.build_matrix_structs()
 
     def build_matrix_structs(self):
-        """Builds a list of available values and a dictionary with the values already there + their coordinates."""
+        """Builds a dictionary with the values already in the board + their coordinates. Also puts them in a hashmap
+        with a visited and not visited dichotomy. This will help the actions function not repeat actions."""
 
         result = {}
 
@@ -44,7 +45,7 @@ class Board:
                 if val != 0:
                     result[val] = (i, j)
 
-        return result
+        return result, result, {}
 
     def get_board(self):
         """Returns a matrix representation"""
@@ -113,27 +114,40 @@ class Numbrix(Problem):
         result = []
 
         # Iterates over all the inserted items and returns the possible action for each one of them
-        for key, (row, col) in state.board.inserted.items():
+        for key, (row, col) in state.board.not_visited.items():
+
+            # Removes this coordinate from the not visited structure and adds it to the already visited since we are
+            # going to generate actions for it
+            del state.board.visited[key]
 
             # Gets restriction values adjacent to the currently being evaluated position
             up, down = state.board.adjacent_vertical_numbers(row, col)
             left, right = state.board.adjacent_horizontal_numbers(row, col)
 
             # Gets available adjacent values
-            available = [i for i in [key + 1, key - 1] if i not in state.board.inserted]
+            available = [i for i in [key + 1, key - 1] if i not in state.board.inserted and 0 < i < state.board.max_value]
 
             # Iterates over the possible adjacent values and appends possible actions to the result list
             for val in available:
 
-                # We need to check if our adjacency is an empty position before appending the action
+                # We need to check if our adjacency is an empty position before appending the action. Also adds this
+                # values to the not yet visited state
                 if up == 0:
-                    result.append((row - 1, col, val))
+                    action = (row - 1, col, val)
+                    result.append(action)
+                    state.board.not_visited[val] = (row - 1, col)
                 if down == 0:
-                    result.append((row + 1, col, val))
+                    action = (row + 1, col, val)
+                    result.append(action)
+                    state.board.not_visited[val] = (row + 1, col)
                 if left == 0:
-                    result.append((row, col - 1, val))
+                    action = (row, col - 1, val)
+                    result.append(action)
+                    state.board.not_visited[val] = (row, col - 1)
                 if right == 0:
-                    result.append((row, col + 1, val))
+                    action = (row, col + 1, val)
+                    result.append(action)
+                    state.board.not_visited[val] = (row, col + 1)
 
         return result
 
@@ -142,6 +156,7 @@ class Numbrix(Problem):
         the current state."""
         new_state = copy.deepcopy(state)
         new_state.board.set_number(*action)
+        state.board.inserted[action[2]] = (action[0], action[1])
         return NumbrixState(new_state.board)
 
     def goal_test(self, state):
@@ -156,7 +171,145 @@ class Numbrix(Problem):
         #       -> Somar linhas/colunas ??? (ideia do stor)
         #       -> Modelo epidemiológico?
         #       -> Calculo de distancias entre valores?
-        return 1
+
+        # TODO: Tips on the next implementation:
+        #   -> os dict's em python estam ordenados, por isso, basta-me ver se estou a ir na posição do i-1 e i+1
+        #   -> Quanto mais preenchido estiver, mais valor lhe vou dar
+        #   -> Ao calcular as actions(), podem criar uma priority queue que tem em primeiro lugar os valores que têm
+        #      menos opções para serem colocados no tabuleiro. depois, usamos isto logo aqui na função
+        #   -> Só computar as actions uma vez para cada valor já no tabuleiro e depois apenas quando um dos seu vizinhos
+        #      é alterado (vou ter de ter dois dict em que coloco os nós ainda não vistos aquando do result())
+        #   -> Fechar os nós que já não têm mais opções (aquando do result(), posso ter uma estrutura para isso?)
+
+        def check_opposite_side(val1, up1, down1, left1, right1, already_checked):
+            if up1 is not None and up1 != 0 and up1 not in visited and up1 != already_checked:
+                if val1 == up1 + 1 or val1 == up1 - 1:
+                    return up1, row - 1, col
+
+            if down1 is not None and down1 != 0 and down1 not in visited and down1 != already_checked:
+                if val1 == down1 + 1 or val1 == down1 - 1:
+                    return down1, row + 1, col
+
+            if left1 is not None and left1 != 0 and left1 not in visited and left1 != already_checked:
+                if val1 == left1 + 1 or val1 == left1 - 1:
+                    return left1, row, col - 1
+
+            if right1 is not None and right1 != 0 and right1 not in visited and right1 != already_checked:
+                if val1 == right1 + 1 or val1 == right1 - 1:
+                    return right1, row, col + 1
+
+            return ()
+
+        # All nodes are initialized with a very big number. This is done because we want to prioritize lower heuristic
+        # values over bigger ones
+        total = 1000000000
+
+        # We initialize our loop condition a true to be able to find a path
+        found_path = True
+
+        # This value is going to be used to "reward" a good path. Each time we find a path, this value is used to
+        # subtract from the total amount. This allows us to be able to "reward" longer paths
+        reward = 2
+
+        # Holds list of visited values (used to not repeat already visited positions)
+        visited = []
+
+        # If this node does not have an action applied to it, then we don't need to find a path
+        if node.action is None:
+            return total
+
+        # Gets action that is going to be taken on this node and unpacks it to get the adjacent nodes
+        row, col, val = node.action
+
+        # Holds iteration value
+        current_val = val
+
+        # Checks if we are seeing a value in the middle of a path and if so, we need to store the other side's info and
+        # proceed to the opposite one
+        has_opposite = False
+        iteration = 0
+        opp_val = -1
+        opp_row = -1
+        opp_col = -1
+
+        while found_path:
+
+            # Gets adjacent values
+            up, down = node.state.board.adjacent_vertical_numbers(row, col)
+            left, right = node.state.board.adjacent_horizontal_numbers(row, col)
+
+            # Now, we try to form a path from this node by evaluating all adjacent nodes and see if they form a path too
+            # and if so, we update the current value and double the next score if we can find even more nodes that form
+            # a path
+            if up is not None and up != 0 and up not in visited:
+                if current_val == up + 1 or current_val == up - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, up) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
+                    row -= 1
+                    visited.append(current_val)
+                    current_val = up
+                    continue
+
+            if down is not None and down != 0 and down not in visited:
+                if current_val == down + 1 or current_val == down - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, down) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
+                    row += 1
+                    visited.append(current_val)
+                    current_val = down
+                    continue
+
+            if left is not None and left != 0 and left not in visited:
+                if current_val == left + 1 or current_val == left - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, left) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
+                    col -= 1
+                    visited.append(current_val)
+                    current_val = left
+                    continue
+
+            if right is not None and right != 0 and right not in visited:
+                if current_val == right + 1 or current_val == right - 1:
+                    opposite = check_opposite_side(current_val, up, down, left, right, right) if iteration == 0 else ()
+                    iteration += 1
+                    if opposite != ():
+                        has_opposite = True
+                        opp_val, opp_row, opp_col = opposite
+                    total -= reward
+                    reward *= 2
+                    col += 1
+                    visited.append(current_val)
+                    current_val = right
+                    continue
+
+            if has_opposite:  # Checks if we had more to the other side
+                current_val = opp_val
+                row = opp_row
+                col = opp_col
+                total -= reward
+                reward *= 2
+                has_opposite = False
+                continue
+
+            # In case no valid path is found, then we stop this loop and return the total accumulated heuristic value
+            found_path = False
+
+        return total
 
 
 if __name__ == "__main__":
