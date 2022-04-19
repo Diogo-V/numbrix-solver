@@ -111,14 +111,14 @@ class Numbrix(Problem):
     def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
+        # Holds list of actions that can be taken
         result = []
+
+        # Holds the not visited nodes for the next iteration
+        new_not_visited = {}
 
         # Iterates over all the inserted items and returns the possible action for each one of them
         for key, (row, col) in state.board.not_visited.items():
-
-            # Removes this coordinate from the not visited structure and adds it to the already visited since we are
-            # going to generate actions for it
-            del state.board.visited[key]
 
             # Gets restriction values adjacent to the currently being evaluated position
             up, down = state.board.adjacent_vertical_numbers(row, col)
@@ -135,19 +135,22 @@ class Numbrix(Problem):
                 if up == 0:
                     action = (row - 1, col, val)
                     result.append(action)
-                    state.board.not_visited[val] = (row - 1, col)
+                    new_not_visited[val] = (row - 1, col)
                 if down == 0:
                     action = (row + 1, col, val)
                     result.append(action)
-                    state.board.not_visited[val] = (row + 1, col)
+                    new_not_visited[val] = (row + 1, col)
                 if left == 0:
                     action = (row, col - 1, val)
                     result.append(action)
-                    state.board.not_visited[val] = (row, col - 1)
+                    new_not_visited[val] = (row, col - 1)
                 if right == 0:
                     action = (row, col + 1, val)
                     result.append(action)
-                    state.board.not_visited[val] = (row, col + 1)
+                    new_not_visited[val] = (row, col + 1)
+
+        # Sets the not visited structure with the newly appended values since they have not yet been seen
+        state.board.not_visited = new_not_visited
 
         return result
 
@@ -180,6 +183,7 @@ class Numbrix(Problem):
         #   -> Só computar as actions uma vez para cada valor já no tabuleiro e depois apenas quando um dos seu vizinhos
         #      é alterado (vou ter de ter dois dict em que coloco os nós ainda não vistos aquando do result())
         #   -> Fechar os nós que já não têm mais opções (aquando do result(), posso ter uma estrutura para isso?)
+        #   -> Contar o nr de casas vazias por linha e somar ao valor que a heuristica dá
 
         def check_opposite_side(val1, up1, down1, left1, right1, already_checked):
             if up1 is not None and up1 != 0 and up1 not in visited and up1 != already_checked:
@@ -321,7 +325,8 @@ if __name__ == "__main__":
     numbrix = Numbrix(board)
 
     # Applies our search algorithm to find the correct solution
-    result = astar_search(numbrix).state.board.get_result()
+    # result = astar_search(numbrix).state.board.get_result()
+    result = depth_first_tree_search(numbrix).state.board.get_result()
 
     # Shows result in stdin
     print(result, end="")
