@@ -207,6 +207,8 @@ def depth_first_tree_search(problem):
 
     while frontier:
         node = frontier.pop()
+        print("Choosing node with action: " + str(node.action))
+        print("Board state: \n" + node.state.board.get_result())
         if problem.goal_test(node.state):
             return node
         frontier.extend(node.expand(problem))

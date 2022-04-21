@@ -30,22 +30,68 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
-        self.inserted, self.not_visited, self.visited = self.build_matrix_structs()
+        self.inserted, self.frontier = self.build_matrix_structs()
 
     def build_matrix_structs(self):
-        """Builds a dictionary with the values already in the board + their coordinates. Also puts them in a hashmap
-        with a visited and not visited dichotomy. This will help the actions function not repeat actions."""
+        """Builds a dictionary with the values already in the board + their coordinates and also setups the frontier."""
+
+        def check_adjacent(row, col):
+            if (row, col) not in frontier:
+                possible_values = Board.is_frontier(self, row, col, result)
+                frontier[(row, col)] = possible_values
+
+        def try_check(row, col, matrix, matrix_col_size):
+            if 0 <= row < matrix_col_size and 0 <= col < matrix_col_size:
+                if matrix[row][col] == 0:
+                    check_adjacent(row, col)
 
         result = {}
+        frontier = {}
 
         # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
         for i in range(self.n):
             for j in range(self.n):
                 val = self.get_number(i, j)
                 if val != 0:
+
                     result[val] = (i, j)
 
-        return result, result, {}
+                    # Stores possible values for the adjacent nodes
+                    try_check(i + 1, j, self.matrix, self.n)
+                    try_check(i - 1, j, self.matrix, self.n)
+                    try_check(i, j + 1, self.matrix, self.n)
+                    try_check(i, j - 1, self.matrix, self.n)
+
+        print("Frontier: ", frontier)
+
+        return result, frontier
+
+    @staticmethod
+    def is_frontier(board, row, col, inserted):
+        """Checks if coordinate is frontier and if so, stores its possible values and returns them."""
+
+        def check(border):
+            result1 = []
+            if border is not None and border != 0:
+                if border - 1 not in inserted and 0 < border - 1 < board.max_value:
+                    result1.append(border - 1)
+                if border + 1 not in inserted and 0 < border + 1 < board.max_value:
+                    result1.append(border + 1)
+            return result1
+
+        result = []
+
+        # Gets restriction values adjacent to the currently being evaluated position
+        up, down = board.adjacent_vertical_numbers(row, col)
+        left, right = board.adjacent_horizontal_numbers(row, col)
+
+        # Appends possible values
+        result.extend(check(up))
+        result.extend(check(down))
+        result.extend(check(left))
+        result.extend(check(right))
+
+        return result
 
     def get_board(self):
         """Returns a matrix representation"""
@@ -111,14 +157,20 @@ class Numbrix(Problem):
     def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
+        # TODO:
+        #   -> Implement frontier nodes
+        #   -> Implement Priority Queue
+        #   -> Implement Aglomerados e os pontos atribuidos
+        #   -> Implement nós lança (nós nas pontas dos aglomerados das listas)
+
         # Holds list of actions that can be taken
         result = []
 
-        # Holds the not visited nodes for the next iteration
-        new_not_visited = {}
+        # Holds the frontier for the next iteration
+        frontier = {}
 
         # Iterates over all the inserted items and returns the possible action for each one of them
-        for key, (row, col) in state.board.not_visited.items():
+        for key, (row, col) in state.board.frontier.items():  # TODO: fix this
 
             # Gets restriction values adjacent to the currently being evaluated position
             up, down = state.board.adjacent_vertical_numbers(row, col)
@@ -135,22 +187,22 @@ class Numbrix(Problem):
                 if up == 0:
                     action = (row - 1, col, val)
                     result.append(action)
-                    new_not_visited[val] = (row - 1, col)
+                    frontier[val] = (row - 1, col)
                 if down == 0:
                     action = (row + 1, col, val)
                     result.append(action)
-                    new_not_visited[val] = (row + 1, col)
+                    frontier[val] = (row + 1, col)
                 if left == 0:
                     action = (row, col - 1, val)
                     result.append(action)
-                    new_not_visited[val] = (row, col - 1)
+                    frontier[val] = (row, col - 1)
                 if right == 0:
                     action = (row, col + 1, val)
                     result.append(action)
-                    new_not_visited[val] = (row, col + 1)
+                    frontier[val] = (row, col + 1)
 
         # Sets the not visited structure with the newly appended values since they have not yet been seen
-        state.board.not_visited = new_not_visited
+        state.board.not_visited = frontier
 
         return result
 
