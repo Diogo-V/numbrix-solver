@@ -35,17 +35,14 @@ class Board:
     def build_matrix_structs(self):
         """Builds a dictionary with the values already in the board + their coordinates and also setups the frontier."""
 
-        def check_adjacent(row, col):
-            if (row, col) not in frontier:
-                possible_values = Board.is_frontier(self, row, col, result)
-                frontier[(row, col)] = possible_values
-
         def try_check(row, col, matrix, matrix_col_size):
             if 0 <= row < matrix_col_size and 0 <= col < matrix_col_size:
                 if matrix[row][col] == 0:
-                    check_adjacent(row, col)
+                    if (row, col) not in frontier:
+                        possible_values = Board.is_frontier(self, row, col, inserted)
+                        frontier[(row, col)] = possible_values
 
-        result = {}
+        inserted = {}
         frontier = {}
 
         # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
@@ -54,7 +51,7 @@ class Board:
                 val = self.get_number(i, j)
                 if val != 0:
 
-                    result[val] = (i, j)
+                    inserted[val] = (i, j)
 
                     # Stores possible values for the adjacent nodes
                     try_check(i + 1, j, self.matrix, self.n)
@@ -62,9 +59,7 @@ class Board:
                     try_check(i, j + 1, self.matrix, self.n)
                     try_check(i, j - 1, self.matrix, self.n)
 
-        print("Frontier: ", frontier)
-
-        return result, frontier
+        return inserted, frontier
 
     @staticmethod
     def is_frontier(board, row, col, inserted):
