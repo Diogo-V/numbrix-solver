@@ -208,12 +208,20 @@ class Numbrix(Problem):
         left, right = state.board.adjacent_horizontal_numbers(row, col)
         if up == 0:
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
+            if len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0:
+                return []  # Remove boards that no longer have solutions
         if down == 0:
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
+            if len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0:
+                return []  # Remove boards that no longer have solutions
         if left == 0:
             state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
+            if len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0:
+                return []  # Remove boards that no longer have solutions
         if right == 0:
             state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
+            if len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0:
+                return []  # Remove boards that no longer have solutions
 
         # TODO: improve this by storing the previous array and only add/remove the changes that were made to it
         return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
@@ -338,7 +346,6 @@ if __name__ == "__main__":
 
     # Applies our search algorithm to find the correct solution
     solved = astar_search(numbrix).state.board.get_result()
-    # solved = depth_first_tree_search(numbrix).state.board.get_result()
 
     # Shows result in stdin
     print(solved, end="")
