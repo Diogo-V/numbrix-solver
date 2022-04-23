@@ -63,9 +63,6 @@ class Board:
             build_frontier(i, j + 1, self)
             build_frontier(i, j - 1, self)
 
-        print("Inserted: ", inserted)
-        print("Frontier: ", frontier)
-
         return inserted, frontier
 
     @staticmethod
@@ -117,8 +114,6 @@ class Board:
     def remove_frontier(board, row, col, value):
         """Removes value from frontier input coordinate."""
         try:
-            print("Removing from frontier: ", (row, col, value))
-            print("Frontier: ", board.frontier)
             board.frontier[(row, col)].remove(value)
         except ValueError:
             pass
@@ -192,8 +187,8 @@ class Numbrix(Problem):
         #       -> Sempre que é  alterada uma coordenada da fronteira, as únicas fronteiras que mudam são as dos
         #          valores [val + 1, val - 1]
         #   -> Implement Priority Queue (done):
-        #       -> Vai usar uma tupla -len, (coordinates)) para obter a posição com menos valores possiveis
-        #       -> Vai ter referencia para os valores com menos posições possiveis?
+        #       -> Vai usar uma tupla (len, (coordinates)) para obter a posição com menos valores possiveis
+        #       -> Vai ter referencia para os valores com menos posições possiveis
         #   -> Implement Aglomerados e os pontos atribuidos
         #   -> Implement nós lança (nós nas pontas dos aglomerados das listas)
 
@@ -201,7 +196,7 @@ class Numbrix(Problem):
         if state.board.previous_action is None:
             return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
 
-        # Unpacks previous action that was taken previously
+        # Unpacks action that was taken previously
         row, col, result = state.board.previous_action
 
         # Since we only need to update the values above and below (frontier property, we check if they are in the
@@ -298,13 +293,14 @@ class Numbrix(Problem):
 if __name__ == "__main__":
 
     # Creates matrix that represents game board from input file
-    board = Board(Board.parse_instance(sys.argv[1]))
+    instance = Board(Board.parse_instance(sys.argv[1]))
 
     # Initializes Numbrix problem
-    numbrix = Numbrix(board)
+    numbrix = Numbrix(instance)
 
     # Applies our search algorithm to find the correct solution
-    result = astar_search(numbrix).state.board.get_result()
+    # solved = astar_search(numbrix).state.board.get_result()
+    solved = depth_first_tree_search(numbrix).state.board.get_result()
 
     # Shows result in stdin
-    print(result, end="")
+    print(solved, end="")
