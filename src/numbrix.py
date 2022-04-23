@@ -68,9 +68,9 @@ class Board:
         def check(border):
             result1 = []
             if border is not None and border != 0:
-                if border - 1 not in inserted and 0 < border - 1 < board.max_value:
+                if border - 1 not in inserted and 0 < border - 1 < board.max_value and border - 1 not in result:
                     result1.append(border - 1)
-                if border + 1 not in inserted and 0 < border + 1 < board.max_value:
+                if border + 1 not in inserted and 0 < border + 1 < board.max_value and border + 1 not in result:
                     result1.append(border + 1)
             return result1
 
@@ -290,6 +290,7 @@ class Numbrix(Problem):
         FRONTIER_LEN = 500
         ONE_NODE = 50
         TWO_NODE = 200
+        BOARD_COMPLETION = 2
 
         # Inits total base value for the heuristic function
         total = 1000
@@ -320,6 +321,9 @@ class Numbrix(Problem):
             total -= TWO_NODE
         elif number_of_adjacent == 1:
             total -= ONE_NODE
+
+        # We also give a better value if the board is getting more complete
+        total -= len(node.state.board.inserted) * BOARD_COMPLETION
 
         return total
 
