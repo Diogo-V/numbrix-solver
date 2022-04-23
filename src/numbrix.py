@@ -7,7 +7,6 @@
 # 95675 Sofia Morgado
 import copy
 import sys
-import heapq as PQ
 
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
@@ -31,8 +30,6 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
-        self.queue = []
-        PQ.heapify(self.queue)
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
 
@@ -45,7 +42,6 @@ class Board:
                     if (row, col) not in frontier:
                         possible_values = Board.get_possible_values(self, row, col, inserted)
                         frontier[(row, col)] = possible_values
-                        PQ.heappush(board.queue, (len(possible_values), (row, col)))
 
         # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
         inserted = {}
@@ -102,7 +98,6 @@ class Board:
 
         if up == 0:
             board.remove_frontier(board, row - 1, col, value)
-            # TODO: update queue
         if down == 0:
             board.remove_frontier(board, row + 1, col, value)
         if left == 0:
@@ -186,7 +181,7 @@ class Numbrix(Problem):
         #   -> Implement frontier nodes (done):
         #       -> Sempre que é  alterada uma coordenada da fronteira, as únicas fronteiras que mudam são as dos
         #          valores [val + 1, val - 1]
-        #   -> Implement Priority Queue (done):
+        #   -> Implement Priority Queue (no need):
         #       -> Vai usar uma tupla (len, (coordinates)) para obter a posição com menos valores possiveis
         #       -> Vai ter referencia para os valores com menos posições possiveis
         #   -> Implement Aglomerados e os pontos atribuidos
@@ -211,7 +206,7 @@ class Numbrix(Problem):
         # We also need to update our own adjacent frontier values
         up, down = state.board.adjacent_vertical_numbers(row, col)
         left, right = state.board.adjacent_horizontal_numbers(row, col)
-        if up == 0:  # TODO: update queue
+        if up == 0:
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
         if down == 0:
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
@@ -287,7 +282,46 @@ class Numbrix(Problem):
         #   -> Ter uma matriz com todos os valores possiveis para cada possição. se algum array ficar vazio, dou um
         #      um péssimo valor na heuristica porque quer dizer que o tabuleiro n tem solução
 
-        return 1
+        # Start of program does not need a heuristic value
+        if node.action is None:
+            return 1
+
+        # Holds multipliers to give to heuristic function
+        FRONTIER_LEN = 500
+        ONE_NODE = 50
+        TWO_NODE = 200
+
+        # Inits total base value for the heuristic function
+        total = 1000
+
+        # Unpacks action to evaluate it
+        row, col, val = node.action
+
+        # If a coordinate has fewer possibilities and this action fills it, then we need to give it a better value
+        total -= FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
+
+        # Gets adjacent nodes values
+        up, down = node.state.board.adjacent_vertical_numbers(row, col)
+        left, right = node.state.board.adjacent_horizontal_numbers(row, col)
+
+        # Now we check how many valid adjacent nodes we have and give a better score if we have them
+        number_of_adjacent = 0
+        if up == val + 1 or up == val - 1:
+            number_of_adjacent += 1
+        if down == val + 1 or down == val - 1:
+            number_of_adjacent += 1
+        if left == val + 1 or left == val - 1:
+            number_of_adjacent += 1
+        if right == val + 1 or right == val - 1:
+            number_of_adjacent += 1
+
+        # Attributes score according to if we have mode valid adjacent nodes or not
+        if number_of_adjacent == 2:
+            total -= TWO_NODE
+        elif number_of_adjacent == 1:
+            total -= ONE_NODE
+
+        return total
 
 
 if __name__ == "__main__":
@@ -299,8 +333,8 @@ if __name__ == "__main__":
     numbrix = Numbrix(instance)
 
     # Applies our search algorithm to find the correct solution
-    # solved = astar_search(numbrix).state.board.get_result()
-    solved = depth_first_tree_search(numbrix).state.board.get_result()
+    solved = astar_search(numbrix).state.board.get_result()
+    # solved = depth_first_tree_search(numbrix).state.board.get_result()
 
     # Shows result in stdin
     print(solved, end="")
