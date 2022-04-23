@@ -276,17 +276,14 @@ class Numbrix(Problem):
         #       -> Dar mais pontos à medida que vai formando um caminho (Muito lento)
         #       -> Somar linhas/colunas ??? (ideia do stor)
         #       -> Modelo epidemiológico?
-        #       -> Calculo de distancias entre valores?
+        #       -> Calculo de distancias entre valores (valores mais proximos tem de estar mais perto e mais afastados
+        #          tem de estar mais longe (a não ser que haja uma path forte)
 
         # TODO: Tips on the next implementation:
-        #   -> os dict's em python estam ordenados, por isso, basta-me ver se estou a ir na posição do i-1 e i+1
         #   -> Quanto mais preenchido estiver, mais valor lhe vou dar
-        #   -> Ao calcular as actions(), podem criar uma priority queue que tem em primeiro lugar os valores que têm
-        #      menos opções para serem colocados no tabuleiro. depois, usamos isto logo aqui na função
         #   -> Só computar as actions uma vez para cada valor já no tabuleiro e depois apenas quando um dos seu vizinhos
         #      é alterado (vou ter de ter dois dict em que coloco os nós ainda não vistos aquando do result())
         #   -> Fechar os nós que já não têm mais opções (aquando do result(), posso ter uma estrutura para isso?)
-        #   -> Contar o nr de casas vazias por linha e somar ao valor que a heuristica dá
         #   -> Ter uma matriz com todos os valores possiveis para cada possição. se algum array ficar vazio, dou um
         #      um péssimo valor na heuristica porque quer dizer que o tabuleiro n tem solução
 
