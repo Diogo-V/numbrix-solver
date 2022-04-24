@@ -7,6 +7,9 @@
 # 95675 Sofia Morgado
 import copy
 import sys
+import bisect
+import collections
+import math
 
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
@@ -30,6 +33,7 @@ class Board:
         self.n = len(init_matrix)
         self.max_value = self.n * self.n
         self.matrix = init_matrix
+        self.deque = collections.deque()
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
 
@@ -53,11 +57,12 @@ class Board:
 
         # Builds frontiers after knowing which nodes have been inserted
         frontier = {}
-        for (i, j) in inserted.values():
+        for val, (i, j) in inserted.items():
             build_frontier(i + 1, j, self)
             build_frontier(i - 1, j, self)
             build_frontier(i, j + 1, self)
             build_frontier(i, j - 1, self)
+            Board.insert_deque(self, val)
 
         return inserted, frontier
 
@@ -112,6 +117,15 @@ class Board:
             board.frontier[(row, col)].remove(value)
         except ValueError:
             pass
+
+    @staticmethod
+    def insert_deque(board, value):
+        """Inserts a value in our deque structure."""
+        board.deque.insert(bisect.bisect_left(board.deque, value), value)
+
+    @staticmethod
+    def get_deque_index(board, value):
+        return bisect.bisect_left(board.deque, value)
 
     def get_board(self):
         """Returns a matrix representation"""
@@ -209,19 +223,19 @@ class Numbrix(Problem):
         if up == 0:
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
             if len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions
+                return []  # Remove boards that no longer have solutions (Butcher)
         if down == 0:
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
             if len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions
+                return []  # Remove boards that no longer have solutions (Butcher)
         if left == 0:
             state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
             if len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions
+                return []  # Remove boards that no longer have solutions (Butcher)
         if right == 0:
             state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
             if len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions
+                return []  # Remove boards that no longer have solutions (Butcher)
 
         # TODO: improve this by storing the previous array and only add/remove the changes that were made to it
         return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
@@ -232,6 +246,7 @@ class Numbrix(Problem):
         new_state = copy.deepcopy(state)
         new_state.board.set_number(*action)
         new_state.board.inserted[action[2]] = (action[0], action[1])
+        new_state.board.insert_deque(new_state.board, action[2])
         new_state.board.frontier.pop((action[0], action[1]))
         new_state.board.previous_action = action
         return NumbrixState(new_state.board)
@@ -287,6 +302,17 @@ class Numbrix(Problem):
         #   -> Ter uma matriz com todos os valores possiveis para cada possição. se algum array ficar vazio, dou um
         #      um péssimo valor na heuristica porque quer dizer que o tabuleiro n tem solução
 
+        def calc_distance(value, target):
+            upper = abs(value - target)
+            value_row, value_col = node.state.board.inserted[value]
+            target_row, target_col = node.state.board.inserted[target]
+            lower = math.sqrt((value_row - target_row) ** 2 + (value_col - target_col) ** 2)
+            result = upper / lower
+            if result < 1:
+                return 10000
+            else:
+                return result
+
         # Start of program does not need a heuristic value
         if node.action is None:
             return 1
@@ -302,6 +328,21 @@ class Numbrix(Problem):
 
         # Unpacks action to evaluate it
         row, col, val = node.action
+
+        # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to calculate the
+        # distance. This allows us to expand the board with plays that go according to a radius of possible values
+        # and by using the 'lance' nodes, we can do this expansion towards the next (lower or upper) value.
+        # We use the value returned from distance as a multiplier of the total result. This allows actions with
+        # distances of 1 (which are the ones that should be taken) to have a much better heuristic value than the others
+        tmp = 1
+        val_index = node.state.board.get_deque_index(node.state.board, val)
+        if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
+            val_right = node.state.board.deque[val_index + 1]
+            tmp *= calc_distance(val, val_right)
+        if val_index - 1 >= 0:  # Calculates left 'lance'
+            val_left = node.state.board.deque[val_index - 1]
+            tmp *= calc_distance(val, val_left)
+        total *= tmp
 
         # If a coordinate has fewer possibilities and this action fills it, then we need to give it a better value
         total -= FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
