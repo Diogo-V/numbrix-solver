@@ -10,6 +10,7 @@ import sys
 import bisect
 import collections
 import math
+import time
 
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
@@ -156,7 +157,7 @@ class Board:
                 board.insert_cluster_manager(board, degree + 1)
                 if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                     board.clusters.pop(val_left)
-                    board.remove_value_cluster_manager(board, degree)
+                board.remove_value_cluster_manager(board, degree)
 
         if i + 1 < len(board.deque):
             if board.deque[i + 1] == value + 1:
@@ -175,7 +176,7 @@ class Board:
                     board.insert_cluster_manager(board, degree + 1)
                     if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                         board.clusters.pop(val_right)
-                        board.remove_value_cluster_manager(board, degree)
+                    board.remove_value_cluster_manager(board, degree)
 
         # This is the first value being put in the deque structure
         if val_left == -1 and val_right == -1:
@@ -395,7 +396,7 @@ class Numbrix(Problem):
             if val in node.state.board.clusters:  # Checks if we are working with a 'lance' node
 
                 # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
-                if node.state.board.clusters[val][1] == Board.get_smallest_cluster_size(node.state.board):
+                if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
 
                     # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
                     # calculate the distance. This allows us to expand the board with plays that go according to a
@@ -459,6 +460,8 @@ class Numbrix(Problem):
 
 if __name__ == "__main__":
 
+    start = time.time()
+
     # Creates matrix that represents game board from input file
     instance = Board(Board.parse_instance(sys.argv[1]))
 
@@ -470,3 +473,7 @@ if __name__ == "__main__":
 
     # Shows result in stdin
     print(solved, end="")
+
+    end = time.time()
+
+    print("Elapsed time in seconds:", end - start)
