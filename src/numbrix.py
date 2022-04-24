@@ -37,6 +37,7 @@ class Board:
         self.cluster_manager = collections.deque()
         self.clusters = {}
         self.possibilities = {}
+        self.did_clusters_merge = False
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
 
@@ -179,6 +180,12 @@ class Board:
     def insert_deque(board, value):
         """Inserts a value in our deque structure."""
 
+        def can_merge_cluster():
+            row, col = board.inserted[value]
+            up, down = board.adjacent_vertical_numbers(row, col)
+            left, right = board.adjacent_horizontal_numbers(row, col)
+            return len({up, down, left, right} & {value + 1}) > 0
+
         # Inserts value in our deque structure
         i = bisect.bisect_left(board.deque, value)
         board.deque.insert(i, value)
@@ -203,12 +210,16 @@ class Board:
                 val_right = board.deque[i + 1]
                 opposite_lance, degree = board.clusters[val_right]
                 if val_left != -1:  # We need to check if we have joined two clusters
-                    new_degree = degree + board.clusters[value][1] + 1
-                    board.clusters[opposite_lance] = (board.clusters[value][0], new_degree)
-                    board.clusters[board.clusters[value][0]] = (opposite_lance, new_degree)
-                    board.insert_cluster_manager(board, new_degree)
-                    board.clusters.pop(value)
-                    board.remove_value_cluster_manager(board, degree)
+                    if can_merge_cluster():
+                        new_degree = degree + board.clusters[value][1]
+                        board.clusters[opposite_lance] = (board.clusters[value][0], new_degree)
+                        board.clusters[board.clusters[value][0]] = (opposite_lance, new_degree)
+                        board.insert_cluster_manager(board, new_degree)
+                        board.remove_value_cluster_manager(board, degree)
+                        board.remove_value_cluster_manager(board, board.clusters[value][1])
+                        board.clusters.pop(value)
+                        board.clusters.pop(value + 1)
+                        board.did_clusters_merge = True
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
                     board.clusters[opposite_lance] = (value, degree + 1)
@@ -221,8 +232,6 @@ class Board:
         if val_left == -1 and val_right == -1:
             board.clusters[value] = (value, 1)
             board.insert_cluster_manager(board, 1)  # Inits a cluster with a size of 1
-
-
 
     @staticmethod
     def get_deque_index(board, value):
@@ -435,8 +444,9 @@ class Numbrix(Problem):
         # Initializes the total value with the number of remaining positions
         total = (node.state.board.max_value - len(node.state.board.inserted)) * IMPROVEMENT_FACTOR
 
-        # Checks if this value only has one possible coordinate
-        if node.parent.state.board.possibilities[val] == 1:
+        # Checks if this value only has one possible coordinate or if this action merged two clusters
+        if node.parent.state.board.possibilities[val] == 1 or node.state.board.did_clusters_merge:
+            node.state.board.did_clusters_merge = False
             return total - SOLO_FACTOR
 
         # Now, we evaluate the state of the cluster by giving more points to smaller clusters. This allows us to better
@@ -444,38 +454,33 @@ class Numbrix(Problem):
         # we just need to fill the other two ends
         if len(node.state.board.clusters) > 2:
 
-            if val in node.state.board.clusters:  # Checks if we are working with a 'lance' node
+            # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
+            if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
 
-                # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
-                if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
-
-                    # Check if this coordinate has only one option and if so, we give a higher priority
-                    if len(node.parent.state.board.frontier[(row, col)]) == 1:
-                        return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
-
-                    # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
-                    # calculate the distance. This allows us to expand the board with plays that go according to a
-                    # radius of possible values and by using the 'lance' nodes, we can do this expansion towards the
-                    # next (lower or upper) value. We only consider actions that give distance = 1 because one of the
-                    # properties of the used formula is that it only returns 1 for EXACT and CORRECT positions in a
-                    # given action (only when filling 'cracks' between 2 clusters since this property is not valid
-                    # for end values in the deque because they don't have a "next node" to compare with)
-                    val_index = node.state.board.get_deque_index(node.state.board, val)
-                    if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
-                        if calc_distance(val, node.state.board.deque[val_index + 1]) != 1:
-                            return KILLER_VALUE
-                    if val_index - 1 >= 0:  # Calculates left 'lance'
-                        if calc_distance(val, node.state.board.deque[val_index - 1]) != 1:
-                            return KILLER_VALUE
-
-                    # If everything is fine, we return the calculated value
+                # Check if this coordinate has only one option and if so, we give a higher priority
+                if len(node.parent.state.board.frontier[(row, col)]) == 1:
                     return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
 
-                else:
-                    return KILLER_VALUE
+                # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
+                # calculate the distance. This allows us to expand the board with plays that go according to a
+                # radius of possible values and by using the 'lance' nodes, we can do this expansion towards the
+                # next (lower or upper) value. We only consider actions that give distance = 1 because one of the
+                # properties of the used formula is that it only returns 1 for EXACT and CORRECT positions in a
+                # given action (only when filling 'cracks' between 2 clusters since this property is not valid
+                # for end values in the deque because they don't have a "next node" to compare with)
+                val_index = node.state.board.get_deque_index(node.state.board, val)
+                if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
+                    if calc_distance(val, node.state.board.deque[val_index + 1]) != 1:
+                        return KILLER_VALUE
+                if val_index - 1 >= 0:  # Calculates left 'lance'
+                    if calc_distance(val, node.state.board.deque[val_index - 1]) != 1:
+                        return KILLER_VALUE
+
+                # If everything is fine, we return the calculated value
+                return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
 
             else:
-                return KILLER_VALUE  # If we are not working with a 'lance' node, we don't even need to evaluate it
+                return KILLER_VALUE
 
         else:  # In this case, we are just trying to fill the ends in the deque structure
 
