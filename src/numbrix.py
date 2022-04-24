@@ -34,6 +34,7 @@ class Board:
         self.max_value = self.n * self.n
         self.matrix = init_matrix
         self.deque = collections.deque()
+        self.cluster_manager = collections.deque()
         self.clusters = {}
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
@@ -120,6 +121,21 @@ class Board:
             pass
 
     @staticmethod
+    def insert_cluster_manager(board, value):
+        """Inserts a new value in our cluster manager structure."""
+        board.cluster_manager.insert(bisect.bisect_left(board.cluster_manager, value), value)
+
+    @staticmethod
+    def get_smallest_cluster_size(board):
+        """Returns smallest cluster size."""
+        return board.cluster_manager[0]
+
+    @staticmethod
+    def remove_value_cluster_manager(board, value):
+        """Removes cluster size from our cluster manager structure."""
+        board.cluster_manager.remove(value)
+
+    @staticmethod
     def insert_deque(board, value):
         """Inserts a value in our deque structure."""
 
@@ -137,27 +153,34 @@ class Board:
                 opposite_lance, degree = board.clusters[val_left]
                 board.clusters[value] = (opposite_lance, degree + 1)
                 board.clusters[opposite_lance] = (value, degree + 1)
+                board.insert_cluster_manager(board, degree + 1)
                 if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                     board.clusters.pop(val_left)
+                    board.remove_value_cluster_manager(board, degree)
 
         if i + 1 < len(board.deque):
             if board.deque[i + 1] == value + 1:
                 val_right = board.deque[i + 1]
                 opposite_lance, degree = board.clusters[val_right]
                 if val_left != -1:  # We need to check if we have joined two clusters
-                    degree += board.clusters[value][1] + 1
-                    board.clusters[opposite_lance] = (board.clusters[value][0], degree)
-                    board.clusters[board.clusters[value][0]] = (opposite_lance, degree)
+                    new_degree = degree + board.clusters[value][1] + 1
+                    board.clusters[opposite_lance] = (board.clusters[value][0], new_degree)
+                    board.clusters[board.clusters[value][0]] = (opposite_lance, new_degree)
+                    board.insert_cluster_manager(board, new_degree)
                     board.clusters.pop(value)
+                    board.remove_value_cluster_manager(board, degree)
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
                     board.clusters[opposite_lance] = (value, degree + 1)
+                    board.insert_cluster_manager(board, degree + 1)
                     if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                         board.clusters.pop(val_right)
+                        board.remove_value_cluster_manager(board, degree)
 
         # This is the first value being put in the deque structure
         if val_left == -1 and val_right == -1:
             board.clusters[value] = (value, 1)
+            board.insert_cluster_manager(board, 1)  # Inits a cluster with a size of 1
 
 
 
@@ -355,68 +378,83 @@ class Numbrix(Problem):
         if node.action is None:
             return 1
 
-        # Holds multipliers to give to heuristic function
-        FRONTIER_LEN = 250
-        ONE_NODE = 20
-        TWO_NODE = 50
-        BOARD_COMPLETION_MULTIPLIER = 2
-        CLUSTER_DEGREE_MULTIPLIER = 2
-
-        # Inits total base value for the heuristic function
-        total = 1000
+        # Holds heuristic termination value
+        KILLER_VALUE = 100000
 
         # Unpacks action to evaluate it
         row, col, val = node.action
 
-        # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to calculate the
-        # distance. This allows us to expand the board with plays that go according to a radius of possible values
-        # and by using the 'lance' nodes, we can do this expansion towards the next (lower or upper) value.
-        # We use the value returned from distance as a multiplier of the total result. This allows actions with
-        # distances of 1 (which are the ones that should be taken) to have a much better heuristic value than the others
-        tmp = 1
-        val_index = node.state.board.get_deque_index(node.state.board, val)
-        if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
-            val_right = node.state.board.deque[val_index + 1]
-            tmp *= calc_distance(val, val_right)
-        if val_index - 1 >= 0:  # Calculates left 'lance'
-            val_left = node.state.board.deque[val_index - 1]
-            tmp *= calc_distance(val, val_left)
-        total *= tmp
+        # Initializes the total value with the number of remaining positions
+        total = node.state.board.max_value - len(node.state.board.inserted)
 
         # Now, we evaluate the state of the cluster by giving more points to smaller clusters. This allows us to better
         # fill the "cracks" between each already placed value and once there is only a single cluster (a single path),
         # we just need to fill the other two ends
-        if len(node.state.board.clusters) > 2 and val in node.state.board.clusters:
-            total *= node.state.board.clusters[val][1] * CLUSTER_DEGREE_MULTIPLIER
+        if len(node.state.board.clusters) > 2:
 
-        # If a coordinate has fewer possibilities and this action fills it, then we need to give it a better value
-        total -= FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
+            if val in node.state.board.clusters:  # Checks if we are working with a 'lance' node
 
-        # Gets adjacent nodes values
-        up, down = node.state.board.adjacent_vertical_numbers(row, col)
-        left, right = node.state.board.adjacent_horizontal_numbers(row, col)
+                # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
+                if node.state.board.clusters[val][1] == Board.get_smallest_cluster_size(node.state.board):
 
-        # Now we check how many valid adjacent nodes we have and give a better score if we have them
-        number_of_adjacent = 0
-        if up == val + 1 or up == val - 1:
-            number_of_adjacent += 1
-        if down == val + 1 or down == val - 1:
-            number_of_adjacent += 1
-        if left == val + 1 or left == val - 1:
-            number_of_adjacent += 1
-        if right == val + 1 or right == val - 1:
-            number_of_adjacent += 1
+                    # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
+                    # calculate the distance. This allows us to expand the board with plays that go according to a
+                    # radius of possible values and by using the 'lance' nodes, we can do this expansion towards the
+                    # next (lower or upper) value. We only consider actions that give distance = 1 because one of the
+                    # properties of the used formula is that it only returns 1 for EXACT and CORRECT positions in a
+                    # given action (only when filling 'cracks' between 2 clusters since this property is not valid
+                    # for end values in the deque because they don't have a "next node" to compare with)
+                    val_index = node.state.board.get_deque_index(node.state.board, val)
+                    if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
+                        if calc_distance(val, node.state.board.deque[val_index + 1]) != 1:
+                            return KILLER_VALUE
+                        else:
+                            return total
+                    if val_index - 1 >= 0:  # Calculates left 'lance'
+                        if calc_distance(val, node.state.board.deque[val_index - 1]) != 1:
+                            return KILLER_VALUE
+                        else:
+                            return total
 
-        # Attributes score according to if we have mode valid adjacent nodes or not
-        if number_of_adjacent == 2:
-            total -= TWO_NODE
-        elif number_of_adjacent == 1:
-            total -= ONE_NODE
+                else:
+                    return KILLER_VALUE
 
-        # We also give a better value if the board is getting more complete
-        total -= len(node.state.board.inserted) * BOARD_COMPLETION_MULTIPLIER
+            else:
+                return KILLER_VALUE  # If we are not working with a 'lance' node, we don't even need to evaluate it
 
-        return total
+        else:  # In this case, we are just trying to fill the ends in the deque structure
+
+            # First thing to do is to check which side of the deque is smaller. We are going to start by filling it
+            # because, when it is done, the other side is going to be a straight path to the solution (since there are
+            # no more possible values)
+            opposite, _ = node.state.board.clusters[val]
+            if opposite > val:  # We are on the left side of the deque structure
+
+                # Counts how many positions are free in either side
+                right_side_remaining = node.state.board.max_value - opposite
+                left_side_remaining = val - 1
+
+                if left_side_remaining <= right_side_remaining:  # Checks if we are using the lowest side
+
+                    total -= total - len(node.parent.state.board.frontier[(row, col)])
+                    return total
+
+                else:
+                    return KILLER_VALUE
+
+            else:  # We are on the right side of the deque structure
+
+                # Counts how many positions are free in either side
+                right_side_remaining = val - node.state.board.max_value
+                left_side_remaining = opposite - 1
+
+                if right_side_remaining <= left_side_remaining:  # Checks if we are using the lowest side
+
+                    total -= total - len(node.parent.state.board.frontier[(row, col)])
+                    return total
+
+                else:
+                    return KILLER_VALUE
 
 
 if __name__ == "__main__":
