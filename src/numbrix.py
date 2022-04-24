@@ -34,6 +34,7 @@ class Board:
         self.max_value = self.n * self.n
         self.matrix = init_matrix
         self.deque = collections.deque()
+        self.clusters = {}
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
 
@@ -121,7 +122,44 @@ class Board:
     @staticmethod
     def insert_deque(board, value):
         """Inserts a value in our deque structure."""
-        board.deque.insert(bisect.bisect_left(board.deque, value), value)
+
+        # Inserts value in our deque structure
+        i = bisect.bisect_left(board.deque, value)
+        board.deque.insert(i, value)
+
+        # Now we need to check cluster conditions and update it if the new value becomes a 'lance' node
+        val_left = -1
+        val_right = -1
+
+        if i - 1 >= 0:
+            if board.deque[i - 1] == value - 1:
+                val_left = board.deque[i - 1]
+                opposite_lance, degree = board.clusters[val_left]
+                board.clusters[value] = (opposite_lance, degree + 1)
+                board.clusters[opposite_lance] = (value, degree + 1)
+                if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
+                    board.clusters.pop(val_left)
+
+        if i + 1 < len(board.deque):
+            if board.deque[i + 1] == value + 1:
+                val_right = board.deque[i + 1]
+                opposite_lance, degree = board.clusters[val_right]
+                if val_left != -1:  # We need to check if we have joined two clusters
+                    degree += board.clusters[value][1] + 1
+                    board.clusters[opposite_lance] = (board.clusters[value][0], degree)
+                    board.clusters[board.clusters[value][0]] = (opposite_lance, degree)
+                    board.clusters.pop(value)
+                else:
+                    board.clusters[value] = (opposite_lance, degree + 1)
+                    board.clusters[opposite_lance] = (value, degree + 1)
+                    if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
+                        board.clusters.pop(val_right)
+
+        # This is the first value being put in the deque structure
+        if val_left == -1 and val_right == -1:
+            board.clusters[value] = (value, 1)
+
+
 
     @staticmethod
     def get_deque_index(board, value):
@@ -318,10 +356,11 @@ class Numbrix(Problem):
             return 1
 
         # Holds multipliers to give to heuristic function
-        FRONTIER_LEN = 500
-        ONE_NODE = 50
-        TWO_NODE = 200
-        BOARD_COMPLETION = 2
+        FRONTIER_LEN = 250
+        ONE_NODE = 20
+        TWO_NODE = 50
+        BOARD_COMPLETION_MULTIPLIER = 2
+        CLUSTER_DEGREE_MULTIPLIER = 2
 
         # Inits total base value for the heuristic function
         total = 1000
@@ -343,6 +382,12 @@ class Numbrix(Problem):
             val_left = node.state.board.deque[val_index - 1]
             tmp *= calc_distance(val, val_left)
         total *= tmp
+
+        # Now, we evaluate the state of the cluster by giving more points to smaller clusters. This allows us to better
+        # fill the "cracks" between each already placed value and once there is only a single cluster (a single path),
+        # we just need to fill the other two ends
+        if len(node.state.board.clusters) > 2 and val in node.state.board.clusters:
+            total *= node.state.board.clusters[val][1] * CLUSTER_DEGREE_MULTIPLIER
 
         # If a coordinate has fewer possibilities and this action fills it, then we need to give it a better value
         total -= FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
@@ -369,7 +414,7 @@ class Numbrix(Problem):
             total -= ONE_NODE
 
         # We also give a better value if the board is getting more complete
-        total -= len(node.state.board.inserted) * BOARD_COMPLETION
+        total -= len(node.state.board.inserted) * BOARD_COMPLETION_MULTIPLIER
 
         return total
 
