@@ -9,7 +9,6 @@ import copy
 import sys
 import bisect
 import collections
-import math
 import time
 
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
@@ -37,6 +36,7 @@ class Board:
         self.deque = collections.deque()
         self.cluster_manager = collections.deque()
         self.clusters = {}
+        self.possibilities = {}
         self.inserted, self.frontier = self.build_matrix_structs()
         self.previous_action = None
 
@@ -70,6 +70,42 @@ class Board:
         return inserted, frontier
 
     @staticmethod
+    def add_possibility(board, value):
+        """Adds/Increments the number of possibilities for a given value."""
+        if value in board.possibilities:
+            board.possibilities[value] += 1
+        else:
+            board.possibilities[value] = 1
+
+    @staticmethod
+    def delete_possibility(board, deleted_value, coordinates_remainder):
+        try:
+            for val in coordinates_remainder:
+                if val == deleted_value:
+                    board.possibilities.pop(deleted_value)
+                else:
+                    board.decrement_possibility(board, val)
+        except KeyError:
+            pass
+
+    @staticmethod
+    def decrement_possibility(board, value):
+        try:
+            board.possibilities[value] -= 1
+        except KeyError:
+            pass
+
+    @staticmethod
+    def clear_possibilities(board, row, col):
+        """Clears possible values from input coordinates."""
+        try:
+            if (row, col) in board.frontier:
+                for val in board.frontier[(row, col)]:
+                    board.decrement_possibility(board, val)
+        except KeyError:
+            pass
+
+    @staticmethod
     def get_possible_values(board, row, col, inserted):
         """Returns possible values for input coordinate. Returns empty list if none are found."""
 
@@ -78,8 +114,10 @@ class Board:
             if border is not None and border != 0:
                 if border - 1 not in inserted and 0 < border - 1 < board.max_value and border - 1 not in result:
                     result1.append(border - 1)
+                    board.add_possibility(board, border - 1)
                 if border + 1 not in inserted and 0 < border + 1 < board.max_value and border + 1 not in result:
                     result1.append(border + 1)
+                    board.add_possibility(board, border + 1)
             return result1
 
         result = []
@@ -118,6 +156,7 @@ class Board:
         """Removes value from frontier input coordinate."""
         try:
             board.frontier[(row, col)].remove(value)
+            board.decrement_possibility(board, value)
         except ValueError:
             pass
 
@@ -283,18 +322,22 @@ class Numbrix(Problem):
         up, down = state.board.adjacent_vertical_numbers(row, col)
         left, right = state.board.adjacent_horizontal_numbers(row, col)
         if up == 0:
+            Board.clear_possibilities(state.board, row - 1, col)
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
             if len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0:
                 return []  # Remove boards that no longer have solutions (Butcher)
         if down == 0:
+            Board.clear_possibilities(state.board, row + 1, col)
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
             if len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0:
                 return []  # Remove boards that no longer have solutions (Butcher)
         if left == 0:
+            Board.clear_possibilities(state.board, row, col - 1)
             state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
             if len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0:
                 return []  # Remove boards that no longer have solutions (Butcher)
         if right == 0:
+            Board.clear_possibilities(state.board, row, col + 1)
             state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
             if len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0:
                 return []  # Remove boards that no longer have solutions (Butcher)
@@ -309,6 +352,7 @@ class Numbrix(Problem):
         new_state.board.set_number(*action)
         new_state.board.inserted[action[2]] = (action[0], action[1])
         new_state.board.insert_deque(new_state.board, action[2])
+        new_state.board.delete_possibility(new_state.board, action[2], new_state.board.frontier[(action[0], action[1])])
         new_state.board.frontier.pop((action[0], action[1]))
         new_state.board.previous_action = action
         return NumbrixState(new_state.board)
@@ -368,7 +412,7 @@ class Numbrix(Problem):
             upper = abs(value - target)
             value_row, value_col = node.state.board.inserted[value]
             target_row, target_col = node.state.board.inserted[target]
-            lower = math.sqrt((value_row - target_row) ** 2 + (value_col - target_col) ** 2)
+            lower = abs(value_row - target_row) + abs(value_col - target_col)
             result = upper / lower
             if result < 1:
                 return 10000
@@ -380,13 +424,20 @@ class Numbrix(Problem):
             return 1
 
         # Holds heuristic termination value
-        KILLER_VALUE = 100000
+        KILLER_VALUE = 900000000
+        FRONTIER_LEN = 100
+        IMPROVEMENT_FACTOR = 10000
+        SOLO_FACTOR = 500
 
         # Unpacks action to evaluate it
         row, col, val = node.action
 
         # Initializes the total value with the number of remaining positions
-        total = node.state.board.max_value - len(node.state.board.inserted)
+        total = (node.state.board.max_value - len(node.state.board.inserted)) * IMPROVEMENT_FACTOR
+
+        # Checks if this value only has one possible coordinate
+        if node.parent.state.board.possibilities[val] == 1:
+            return total - SOLO_FACTOR
 
         # Now, we evaluate the state of the cluster by giving more points to smaller clusters. This allows us to better
         # fill the "cracks" between each already placed value and once there is only a single cluster (a single path),
@@ -397,6 +448,10 @@ class Numbrix(Problem):
 
                 # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
                 if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
+
+                    # Check if this coordinate has only one option and if so, we give a higher priority
+                    if len(node.parent.state.board.frontier[(row, col)]) == 1:
+                        return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
 
                     # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
                     # calculate the distance. This allows us to expand the board with plays that go according to a
@@ -409,13 +464,12 @@ class Numbrix(Problem):
                     if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
                         if calc_distance(val, node.state.board.deque[val_index + 1]) != 1:
                             return KILLER_VALUE
-                        else:
-                            return total
                     if val_index - 1 >= 0:  # Calculates left 'lance'
                         if calc_distance(val, node.state.board.deque[val_index - 1]) != 1:
                             return KILLER_VALUE
-                        else:
-                            return total
+
+                    # If everything is fine, we return the calculated value
+                    return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
 
                 else:
                     return KILLER_VALUE
