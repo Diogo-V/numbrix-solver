@@ -338,15 +338,31 @@ class Numbrix(Problem):
         if up == 0:
             Board.clear_possibilities(state.board, row - 1, col)
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if down == 0:
             Board.clear_possibilities(state.board, row + 1, col)
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if left == 0:
             Board.clear_possibilities(state.board, row, col - 1)
             state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if right == 0:
             Board.clear_possibilities(state.board, row, col + 1)
             state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # R
 
         # TODO: improve this by storing the previous array and only add/remove the changes that were made to it
         return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
