@@ -411,36 +411,7 @@ class Numbrix(Problem):
 
     def goal_test(self, state):
         """Checks if we have a valid solution of this game-"""
-
-        if len(state.board.inserted) != state.board.max_value:
-            return False
-
-        # Stores the start of this board (number one)
-        row, col = state.board.inserted[1]
-
-        # Tries to go through the solution's path and check whether it is valid or not
-        val = 1
-        while val < state.board.max_value:
-
-            # Gets adjacent values to discover where is the next value located
-            up, down = state.board.adjacent_vertical_numbers(row, col)
-            left, right = state.board.adjacent_horizontal_numbers(row, col)
-
-            # Tries to see where is the next position
-            if up == state.board.get_number(row, col) + 1:
-                row -= 1
-            elif down == state.board.get_number(row, col) + 1:
-                row += 1
-            elif left == state.board.get_number(row, col) + 1:
-                col -= 1
-            elif right == state.board.get_number(row, col) + 1:
-                col += 1
-            else:
-                return False  # In this case, we were not able to find a suitable path and so, this is not a solution
-
-            val += 1
-
-        return True
+        return len(state.board.inserted) == state.board.max_value
 
     def h(self, node):
         """Heuristic function used in A*"""
