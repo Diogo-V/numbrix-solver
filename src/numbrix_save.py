@@ -6,12 +6,11 @@
 # 95555 Diogo Venâncio
 # 95675 Sofia Morgado
 import copy
-import heapq
 import sys
 import bisect
 import collections
+import time
 
-from utils import PriorityQueue
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
 
@@ -41,8 +40,7 @@ class Board:
         self.did_clusters_merge = False
         self.inserted = {}
         self.frontier = {}
-        self.pointer = None
-        self.reached_end = False
+        self.previous_action = None
         self.build_matrix_structs()
 
     def build_matrix_structs(self):
@@ -69,8 +67,6 @@ class Board:
             build_frontier(i, j + 1, self)
             build_frontier(i, j - 1, self)
             Board.insert_deque(self, val)
-
-        self.pointer = (self.inserted[self.deque[0]][0], self.inserted[self.deque[0]][1], self.deque[0])
 
     @staticmethod
     def add_possibility(board, value):
@@ -117,8 +113,10 @@ class Board:
             if border is not None and border != 0:
                 if border - 1 not in inserted and 0 < border - 1 <= board.max_value and border - 1 not in result:
                     result1.append(border - 1)
+                    board.add_possibility(board, border - 1)
                 if border + 1 not in inserted and 0 < border + 1 <= board.max_value and border + 1 not in result:
                     result1.append(border + 1)
+                    board.add_possibility(board, border + 1)
             return result1
 
         result = []
@@ -227,7 +225,6 @@ class Board:
                         if degree != 1:
                             board.clusters.pop(value + 1)
                         board.did_clusters_merge = True
-                        return opposite_lance
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
                     board.clusters[opposite_lance] = (value, degree + 1)
@@ -244,15 +241,6 @@ class Board:
     @staticmethod
     def get_deque_index(board, value):
         return bisect.bisect_left(board.deque, value)
-
-    @staticmethod
-    def calc_distance(board, action, target):
-        row, col, val = action
-        upper = abs(val - target)
-        target_row, target_col = board.inserted[target]
-        lower = abs(row - target_row) + abs(col - target_col)
-        result = upper / lower
-        return result
 
     def get_board(self):
         """Returns a matrix representation"""
@@ -318,93 +306,77 @@ class Numbrix(Problem):
     def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
+        # TODO (ideias):
+        #   -> Implement frontier nodes (done):
+        #       -> Sempre que é  alterada uma coordenada da fronteira, as únicas fronteiras que mudam são as dos
+        #          valores [val + 1, val - 1]
+        #   -> Implement Priority Queue (no need):
+        #       -> Vai usar uma tupla (len, (coordinates)) para obter a posição com menos valores possiveis
+        #       -> Vai ter referencia para os valores com menos posições possiveis
+        #   -> Implement Aglomerados e os pontos atribuidos
+        #   -> Implement nós lança (nós nas pontas dos aglomerados das listas)
+
         # If it is the first iteration, we don't need to do anything because it has already been done
         if state.board.pointer is None:
             return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
 
         # Unpacks action that was taken previously
-        row, col, val = state.board.pointer
+        row, col, result = state.board.pointer
+
+        # Since we only need to update the values above and below (frontier property, we check if they are in the
+        # board and update their adjacent frontier values
+        if result + 1 in state.board.inserted:
+            adj_row, adj_col = state.board.inserted[result + 1]
+            Board.update_adjacent_frontier(state.board, adj_row, adj_col, result)
+        if result - 1 in state.board.inserted:
+            adj_row, adj_col = state.board.inserted[result - 1]
+            Board.update_adjacent_frontier(state.board, adj_row, adj_col, result)
 
         # We also need to update our own adjacent frontier values
         up, down = state.board.adjacent_vertical_numbers(row, col)
         left, right = state.board.adjacent_horizontal_numbers(row, col)
-
-        # Frontier of the currently being evaluated position
-        frontier = {}
-
-        # Possible values
-        pos = []
-        if state.board.reached_end:
-            values_pos = [val - 1]
-        else:
-            values_pos = [val + 1]
-        for value in values_pos:
-            if value not in state.board.inserted and 0 < value <= state.board.max_value:
-                pos.append(value)
-
-        # No more possibilities
-        if not pos:
-            return []
-
-        # Updates frontier
         if up == 0:
-            frontier[(row - 1, col)] = pos
+            Board.clear_possibilities(state.board, row - 1, col)
+            state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if down == 0:
-            frontier[(row + 1, col)] = pos
+            Board.clear_possibilities(state.board, row + 1, col)
+            state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if left == 0:
-            frontier[(row, col - 1)] = pos
+            Board.clear_possibilities(state.board, row, col - 1)
+            state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # Remove boards that no longer have solutions (Butcher)
         if right == 0:
-            frontier[(row, col + 1)] = pos
+            Board.clear_possibilities(state.board, row, col + 1)
+            state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
+            if (result - 1 not in state.board.inserted or result + 1 not in state.board.inserted) and \
+                    len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0 and \
+                    len(state.board.clusters) > 2:
+                return []  # R
 
-        if len(state.board.clusters) == 2:  # In this case, we have already filled all the cracks between the clusters
-
-            return [(row, col, val) for (row, col), values in frontier.items() for val in values]
-
-        else:  # We still haven't gotten to the highest element
-
-            # Gets element that we are trying to get to
-            my_index = Board.get_deque_index(state.board, val)
-            next_value = state.board.deque[my_index + 1]
-
-            tmp = []
-            heapq.heapify(tmp)
-
-            # Builds heap to prioritize lower distance values
-            for (row, col), values in frontier.items():
-                for possibility in values:
-                    dist = Board.calc_distance(state.board, (row, col, possibility), next_value)
-                    if dist >= 1:
-                        heapq.heappush(tmp, (dist, (row, col, possibility)))
-
-            result = []
-            for val in tmp:
-                result.append(val[1])
-            return result
+        # TODO: improve this by storing the previous array and only add/remove the changes that were made to it
+        return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
 
     def result(self, state, action):
         """Returns the resulting state of applying the input action (result from self.action(state)) to
         the current state."""
-
-        def is_valid_adjacent(board):
-            row, col = board.inserted[action[2]]
-            up, down = board.adjacent_vertical_numbers(row, col)
-            left, right = board.adjacent_horizontal_numbers(row, col)
-            return len({up, down, left, right} & {action[2] + 1}) > 0
-
         new_state = copy.deepcopy(state)
         new_state.board.set_number(*action)
         new_state.board.inserted[action[2]] = (action[0], action[1])
-        new_max = new_state.board.insert_deque(new_state.board, action[2])
+        new_state.board.insert_deque(new_state.board, action[2])
+        new_state.board.delete_possibility(new_state.board, action[2], new_state.board.frontier[(action[0], action[1])])
+        new_state.board.frontier.pop((action[0], action[1]))
         new_state.board.pointer = action
-        if action[2] == new_state.board.max_value or new_max == new_state.board.max_value:  # We reached the end and should fill the start
-            new_state.board.reached_end = True
-            new_state.board.pointer = (*new_state.board.inserted[new_state.board.deque[0]], new_state.board.deque[0])
-            return NumbrixState(new_state.board)
-        if not new_state.board.reached_end:
-            i = Board.get_deque_index(new_state.board, action[2] + 1)
-            if i + 1 < len(new_state.board.deque) or new_max is not None:
-                if new_state.board.deque[i] == action[2] + 1 and is_valid_adjacent(new_state.board):  # We have "filled a space between the clusters"
-                    new_state.board.pointer = (*new_state.board.inserted[new_max], new_max)
         return NumbrixState(new_state.board)
 
     def goal_test(self, state):
@@ -591,7 +563,7 @@ if __name__ == "__main__":
     numbrix = Numbrix(instance)
 
     # Applies our search algorithm to find the correct solution
-    solved = depth_first_tree_search(numbrix).state.board.get_result()
+    solved = astar_search(numbrix).state.board.get_result()
 
     # Shows result in stdin
     print(solved, end="")
