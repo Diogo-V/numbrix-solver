@@ -113,10 +113,10 @@ class Board:
         def check(border):
             result1 = []
             if border is not None and border != 0:
-                if border - 1 not in inserted and 0 < border - 1 < board.max_value and border - 1 not in result:
+                if border - 1 not in inserted and 0 < border - 1 <= board.max_value and border - 1 not in result:
                     result1.append(border - 1)
                     board.add_possibility(board, border - 1)
-                if border + 1 not in inserted and 0 < border + 1 < board.max_value and border + 1 not in result:
+                if border + 1 not in inserted and 0 < border + 1 <= board.max_value and border + 1 not in result:
                     result1.append(border + 1)
                     board.add_possibility(board, border + 1)
             return result1
@@ -503,14 +503,15 @@ class Numbrix(Problem):
                 right_side_remaining = node.state.board.max_value - opposite
                 left_side_remaining = val - 1
 
-                if left_side_remaining <= right_side_remaining:  # Checks if we are using the lowest side
+                if left_side_remaining <= right_side_remaining or right_side_remaining == 0:  # Checks if we are using the lowest side
 
                     # Gives a better value if this position has less possible values
-                    total -= total - len(node.parent.state.board.frontier[(row, col)])
+                    total += len(node.parent.state.board.frontier[(row, col)]) - (right_side_remaining + left_side_remaining)
 
                     # We give a better value for higher distances here because we want the value to be put further
                     # away from the other extreme
-                    total -= calc_distance(val, node.state.board.deque[-1])
+                    if right_side_remaining != 0:
+                        total -= calc_distance(val, node.state.board.deque[-1])
 
                     return total
 
@@ -520,17 +521,18 @@ class Numbrix(Problem):
             else:  # We are on the right side of the deque structure
 
                 # Counts how many positions are free in either side
-                right_side_remaining = val - node.state.board.max_value
+                right_side_remaining = node.state.board.max_value - val
                 left_side_remaining = opposite - 1
 
-                if right_side_remaining <= left_side_remaining:  # Checks if we are using the lowest side
+                if right_side_remaining <= left_side_remaining or left_side_remaining == 0:  # Checks if we are using the lowest side
 
                     # Gives a better value if this position has less possible values
-                    total -= total - len(node.parent.state.board.frontier[(row, col)])
+                    total += len(node.parent.state.board.frontier[(row, col)]) - (right_side_remaining + left_side_remaining)
 
                     # We give a better value for higher distances here because we want the value to be put further
                     # away from the other extreme
-                    total -= calc_distance(val, node.state.board.deque[0])
+                    if left_side_remaining != 0:
+                        total -= calc_distance(val, node.state.board.deque[0])
 
                     return total
 
