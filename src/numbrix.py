@@ -11,7 +11,7 @@ import sys
 import bisect
 import collections
 
-from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
+from search import Problem, depth_first_tree_search
 
 
 class NumbrixState:
