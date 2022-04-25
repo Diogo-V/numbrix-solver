@@ -34,7 +34,6 @@ class Board:
         self.max_value = self.n * self.n
         self.matrix = init_matrix
         self.deque = collections.deque()
-        self.cluster_manager = collections.deque()
         self.clusters = {}
         self.inserted = {}
         self.pointer = None
@@ -87,21 +86,6 @@ class Board:
         return result
 
     @staticmethod
-    def insert_cluster_manager(board, value):
-        """Inserts a new value in our cluster manager structure."""
-        board.cluster_manager.insert(bisect.bisect_left(board.cluster_manager, value), value)
-
-    @staticmethod
-    def get_smallest_cluster_size(board):
-        """Returns smallest cluster size."""
-        return board.cluster_manager[0]
-
-    @staticmethod
-    def remove_value_cluster_manager(board, value):
-        """Removes cluster size from our cluster manager structure."""
-        board.cluster_manager.remove(value)
-
-    @staticmethod
     def insert_deque(board, value):
         """Inserts a value in our deque structure."""
 
@@ -131,10 +115,8 @@ class Board:
                 opposite_lance, degree = board.clusters[val_left]
                 board.clusters[value] = (opposite_lance, degree + 1)
                 board.clusters[opposite_lance] = (value, degree + 1)
-                board.insert_cluster_manager(board, degree + 1)
                 if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                     board.clusters.pop(val_left)
-                board.remove_value_cluster_manager(board, degree)
 
         if i + 1 < len(board.deque):
             if board.deque[i + 1] == value + 1:
@@ -145,9 +127,6 @@ class Board:
                         new_degree = degree + board.clusters[value][1]
                         board.clusters[opposite_lance] = (board.clusters[value][0], new_degree)
                         board.clusters[board.clusters[value][0]] = (opposite_lance, new_degree)
-                        board.insert_cluster_manager(board, new_degree)
-                        board.remove_value_cluster_manager(board, degree)
-                        board.remove_value_cluster_manager(board, board.clusters[value][1])
                         board.clusters.pop(value)
                         if degree != 1:
                             board.clusters.pop(value + 1)
@@ -155,15 +134,12 @@ class Board:
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
                     board.clusters[opposite_lance] = (value, degree + 1)
-                    board.insert_cluster_manager(board, degree + 1)
                     if degree > 1:  # Takes care of a cluster with a single value (does not allow deletion of it)
                         board.clusters.pop(val_right)
-                    board.remove_value_cluster_manager(board, degree)
 
         # This is the first value being put in the deque structure
         if val_left == -1 and val_right == -1:
             board.clusters[value] = (value, 1)
-            board.insert_cluster_manager(board, 1)  # Inits a cluster with a size of 1
 
     @staticmethod
     def get_deque_index(board, value):
