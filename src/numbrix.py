@@ -186,6 +186,12 @@ class Board:
             left, right = board.adjacent_horizontal_numbers(row, col)
             return len({up, down, left, right} & {value + 1}) > 0
 
+        def is_adjacent_left():
+            row, col = board.inserted[value]
+            up, down = board.adjacent_vertical_numbers(row, col)
+            left, right = board.adjacent_horizontal_numbers(row, col)
+            return len({up, down, left, right} & {value - 1}) > 0
+
         # Inserts value in our deque structure
         i = bisect.bisect_left(board.deque, value)
         board.deque.insert(i, value)
@@ -195,7 +201,7 @@ class Board:
         val_right = -1
 
         if i - 1 >= 0:
-            if board.deque[i - 1] == value - 1:
+            if board.deque[i - 1] == value - 1 and is_adjacent_left():
                 val_left = board.deque[i - 1]
                 opposite_lance, degree = board.clusters[val_left]
                 board.clusters[value] = (opposite_lance, degree + 1)
@@ -218,7 +224,6 @@ class Board:
                         board.remove_value_cluster_manager(board, degree)
                         board.remove_value_cluster_manager(board, board.clusters[value][1])
                         board.clusters.pop(value)
-                        board.clusters.pop(value + 1)
                         board.did_clusters_merge = True
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
@@ -333,23 +338,15 @@ class Numbrix(Problem):
         if up == 0:
             Board.clear_possibilities(state.board, row - 1, col)
             state.board.frontier[(row - 1, col)] = Board.get_possible_values(state.board, row - 1, col, state.board.inserted)
-            if len(list(set(state.board.frontier[(row - 1, col)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions (Butcher)
         if down == 0:
             Board.clear_possibilities(state.board, row + 1, col)
             state.board.frontier[(row + 1, col)] = Board.get_possible_values(state.board, row + 1, col, state.board.inserted)
-            if len(list(set(state.board.frontier[(row + 1, col)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions (Butcher)
         if left == 0:
             Board.clear_possibilities(state.board, row, col - 1)
             state.board.frontier[(row, col - 1)] = Board.get_possible_values(state.board, row, col - 1, state.board.inserted)
-            if len(list(set(state.board.frontier[(row, col - 1)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions (Butcher)
         if right == 0:
             Board.clear_possibilities(state.board, row, col + 1)
             state.board.frontier[(row, col + 1)] = Board.get_possible_values(state.board, row, col + 1, state.board.inserted)
-            if len(list(set(state.board.frontier[(row, col + 1)]) & {result + 1, result - 1})) == 0:
-                return []  # Remove boards that no longer have solutions (Butcher)
 
         # TODO: improve this by storing the previous array and only add/remove the changes that were made to it
         return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
@@ -456,6 +453,11 @@ class Numbrix(Problem):
 
             # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
             if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
+
+                # Blocks expanding the deque to the ends while there are spaces between the clusters
+                if node.parent.state.board.deque[0] - 1 == node.state.board.deque[0] \
+                        or node.parent.state.board.deque[-1] + 1 == node.state.board.deque[-1]:
+                    return KILLER_VALUE
 
                 # Check if this coordinate has only one option and if so, we give a higher priority
                 if len(node.parent.state.board.frontier[(row, col)]) == 1:
