@@ -38,8 +38,10 @@ class Board:
         self.clusters = {}
         self.possibilities = {}
         self.did_clusters_merge = False
-        self.inserted, self.frontier = self.build_matrix_structs()
+        self.inserted = {}
+        self.frontier = {}
         self.previous_action = None
+        self.build_matrix_structs()
 
     def build_matrix_structs(self):
         """Builds a dictionary with the values already in the board + their coordinates and also setups the frontier."""
@@ -47,28 +49,24 @@ class Board:
         def build_frontier(row, col, board):
             if 0 <= row < board.n and 0 <= col < board.n:
                 if board.matrix[row][col] == 0:
-                    if (row, col) not in frontier:
-                        possible_values = Board.get_possible_values(self, row, col, inserted)
-                        frontier[(row, col)] = possible_values
+                    if (row, col) not in self.frontier:
+                        possible_values = Board.get_possible_values(self, row, col, self.inserted)
+                        self.frontier[(row, col)] = possible_values
 
         # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
-        inserted = {}
         for i in range(self.n):
             for j in range(self.n):
                 val = self.get_number(i, j)
                 if val != 0:
-                    inserted[val] = (i, j)
+                    self.inserted[val] = (i, j)
 
         # Builds frontiers after knowing which nodes have been inserted
-        frontier = {}
-        for val, (i, j) in inserted.items():
+        for val, (i, j) in self.inserted.items():
             build_frontier(i + 1, j, self)
             build_frontier(i - 1, j, self)
             build_frontier(i, j + 1, self)
             build_frontier(i, j - 1, self)
             Board.insert_deque(self, val)
-
-        return inserted, frontier
 
     @staticmethod
     def add_possibility(board, value):
@@ -542,8 +540,6 @@ class Numbrix(Problem):
 
 if __name__ == "__main__":
 
-    start = time.time()
-
     # Creates matrix that represents game board from input file
     instance = Board(Board.parse_instance(sys.argv[1]))
 
@@ -555,7 +551,3 @@ if __name__ == "__main__":
 
     # Shows result in stdin
     print(solved, end="")
-
-    end = time.time()
-
-    print("Elapsed time in seconds:", end - start)
