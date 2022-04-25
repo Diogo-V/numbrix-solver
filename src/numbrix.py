@@ -224,6 +224,8 @@ class Board:
                         board.remove_value_cluster_manager(board, degree)
                         board.remove_value_cluster_manager(board, board.clusters[value][1])
                         board.clusters.pop(value)
+                        if degree != 1:
+                            board.clusters.pop(value + 1)
                         board.did_clusters_merge = True
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
@@ -430,16 +432,21 @@ class Numbrix(Problem):
             return 1
 
         # Holds heuristic termination value
-        KILLER_VALUE = 900000000
+        KILLER_VALUE = 900000000000
         FRONTIER_LEN = 100
-        IMPROVEMENT_FACTOR = 10000
+        IMPROVEMENT_FACTOR = 10000000
+        SINGLE_CLUSTER_FACTOR = 10000
         SOLO_FACTOR = 500
 
         # Unpacks action to evaluate it
         row, col, val = node.action
 
         # Initializes the total value with the number of remaining positions
-        total = (node.state.board.max_value - len(node.state.board.inserted)) * IMPROVEMENT_FACTOR
+        total = (node.state.board.max_value - len(node.state.board.inserted))
+        if len(node.state.board.clusters) == 2:
+            total *= SINGLE_CLUSTER_FACTOR
+        else:
+            total *= IMPROVEMENT_FACTOR
 
         # Checks if this value only has one possible coordinate or if this action merged two clusters
         if node.parent.state.board.possibilities[val] == 1 or node.state.board.did_clusters_merge:
@@ -498,7 +505,13 @@ class Numbrix(Problem):
 
                 if left_side_remaining <= right_side_remaining:  # Checks if we are using the lowest side
 
+                    # Gives a better value if this position has less possible values
                     total -= total - len(node.parent.state.board.frontier[(row, col)])
+
+                    # We give a better value for higher distances here because we want the value to be put further
+                    # away from the other extreme
+                    total -= calc_distance(val, node.state.board.deque[-1])
+
                     return total
 
                 else:
@@ -512,7 +525,13 @@ class Numbrix(Problem):
 
                 if right_side_remaining <= left_side_remaining:  # Checks if we are using the lowest side
 
+                    # Gives a better value if this position has less possible values
                     total -= total - len(node.parent.state.board.frontier[(row, col)])
+
+                    # We give a better value for higher distances here because we want the value to be put further
+                    # away from the other extreme
+                    total -= calc_distance(val, node.state.board.deque[0])
+
                     return total
 
                 else:
