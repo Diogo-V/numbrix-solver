@@ -11,6 +11,7 @@ import sys
 import bisect
 import collections
 
+from utils import PriorityQueue
 from search import Problem, Node, astar_search, breadth_first_tree_search, depth_first_tree_search, greedy_search, recursive_best_first_search
 
 
@@ -36,13 +37,23 @@ class Board:
         self.deque = collections.deque()
         self.cluster_manager = collections.deque()
         self.clusters = {}
+        self.possibilities = {}
+        self.did_clusters_merge = False
         self.inserted = {}
+        self.frontier = {}
         self.pointer = None
         self.reached_end = False
         self.build_matrix_structs()
 
     def build_matrix_structs(self):
         """Builds a dictionary with the values already in the board + their coordinates and also setups the frontier."""
+
+        def build_frontier(row, col, board):
+            if 0 <= row < board.n and 0 <= col < board.n:
+                if board.matrix[row][col] == 0:
+                    if (row, col) not in self.frontier:
+                        possible_values = Board.get_possible_values(self, row, col, self.inserted)
+                        self.frontier[(row, col)] = possible_values
 
         # Goes over all positions in the matrix and checks if they are already filled and stores their coordinates
         for i in range(self.n):
@@ -52,12 +63,52 @@ class Board:
                     self.inserted[val] = (i, j)
 
         # Builds frontiers after knowing which nodes have been inserted
-        for val in self.inserted.keys():
+        for val, (i, j) in self.inserted.items():
+            build_frontier(i + 1, j, self)
+            build_frontier(i - 1, j, self)
+            build_frontier(i, j + 1, self)
+            build_frontier(i, j - 1, self)
             Board.insert_deque(self, val)
 
         if self.deque[0] in self.clusters:
             opposite, _ = self.clusters[self.deque[0]]
             self.pointer = (self.inserted[opposite][0], self.inserted[opposite][1], opposite)
+
+    @staticmethod
+    def add_possibility(board, value):
+        """Adds/Increments the number of possibilities for a given value."""
+        if value in board.possibilities:
+            board.possibilities[value] += 1
+        else:
+            board.possibilities[value] = 1
+
+    @staticmethod
+    def delete_possibility(board, deleted_value, coordinates_remainder):
+        try:
+            for val in coordinates_remainder:
+                if val == deleted_value:
+                    board.possibilities.pop(deleted_value)
+                else:
+                    board.decrement_possibility(board, val)
+        except KeyError:
+            pass
+
+    @staticmethod
+    def decrement_possibility(board, value):
+        try:
+            board.possibilities[value] -= 1
+        except KeyError:
+            pass
+
+    @staticmethod
+    def clear_possibilities(board, row, col):
+        """Clears possible values from input coordinates."""
+        try:
+            if (row, col) in board.frontier:
+                for val in board.frontier[(row, col)]:
+                    board.decrement_possibility(board, val)
+        except KeyError:
+            pass
 
     @staticmethod
     def get_possible_values(board, row, col, inserted):
@@ -85,6 +136,32 @@ class Board:
         result.extend(check(right))
 
         return result
+
+    @staticmethod
+    def update_adjacent_frontier(board, row, col, value):
+        """Updates board frontier values when 'value' is inserted in input coordinates."""
+
+        # Gets currently open adjacent coordinates (these are the only ones that can get updated)
+        up, down = board.adjacent_vertical_numbers(row, col)
+        left, right = board.adjacent_horizontal_numbers(row, col)
+
+        if up == 0:
+            board.remove_frontier(board, row - 1, col, value)
+        if down == 0:
+            board.remove_frontier(board, row + 1, col, value)
+        if left == 0:
+            board.remove_frontier(board, row, col - 1, value)
+        if right == 0:
+            board.remove_frontier(board, row, col + 1, value)
+
+    @staticmethod
+    def remove_frontier(board, row, col, value):
+        """Removes value from frontier input coordinate."""
+        try:
+            board.frontier[(row, col)].remove(value)
+            board.decrement_possibility(board, value)
+        except ValueError:
+            pass
 
     @staticmethod
     def insert_cluster_manager(board, value):
@@ -151,6 +228,7 @@ class Board:
                         board.clusters.pop(value)
                         if degree != 1:
                             board.clusters.pop(value + 1)
+                        board.did_clusters_merge = True
                         return opposite_lance
                 else:
                     board.clusters[value] = (opposite_lance, degree + 1)
@@ -242,6 +320,10 @@ class Numbrix(Problem):
     def actions(self, state):
         """Returns a list of actions that can be done on the input state."""
 
+        # If it is the first iteration, we don't need to do anything because it has already been done
+        if state.board.pointer is None:
+            return [(row, col, val) for (row, col), values in state.board.frontier.items() for val in values]
+
         # Unpacks action that was taken previously
         row, col, val = state.board.pointer
 
@@ -316,14 +398,14 @@ class Numbrix(Problem):
         new_state.board.inserted[action[2]] = (action[0], action[1])
         new_max = new_state.board.insert_deque(new_state.board, action[2])
         new_state.board.pointer = action
-        if action[2] == new_state.board.max_value or new_max == new_state.board.max_value:
+        if action[2] == new_state.board.max_value or new_max == new_state.board.max_value:  # We reached the end and should fill the start
             new_state.board.reached_end = True
             new_state.board.pointer = (*new_state.board.inserted[new_state.board.deque[0]], new_state.board.deque[0])
             return NumbrixState(new_state.board)
         if not new_state.board.reached_end:
             i = Board.get_deque_index(new_state.board, action[2] + 1)
             if i + 1 < len(new_state.board.deque) or new_max is not None:
-                if new_state.board.deque[i] == action[2] + 1 and is_valid_adjacent(new_state.board):
+                if new_state.board.deque[i] == action[2] + 1 and is_valid_adjacent(new_state.board):  # We have "filled a space between the clusters"
                     new_state.board.pointer = (*new_state.board.inserted[new_max], new_max)
         return NumbrixState(new_state.board)
 
@@ -333,7 +415,144 @@ class Numbrix(Problem):
 
     def h(self, node):
         """Heuristic function used in A*"""
-        return 1
+        # TODO: ideas
+        #       -> Ver se o valor que está ao meu lado é +/- 1 que eu e dar mais pontos
+        #       -> Dar mais pontos à medida que vai formando um caminho (Muito lento)
+        #       -> Somar linhas/colunas ??? (ideia do stor)
+        #       -> Modelo epidemiológico?
+        #       -> Calculo de distancias entre valores (valores mais proximos tem de estar mais perto e mais afastados
+        #          tem de estar mais longe (a não ser que haja uma path forte)
+
+        # TODO: Tips on the next implementation:
+        #   -> Quanto mais preenchido estiver, mais valor lhe vou dar
+        #   -> Só computar as actions uma vez para cada valor já no tabuleiro e depois apenas quando um dos seu vizinhos
+        #      é alterado (vou ter de ter dois dict em que coloco os nós ainda não vistos aquando do result())
+        #   -> Fechar os nós que já não têm mais opções (aquando do result(), posso ter uma estrutura para isso?)
+        #   -> Ter uma matriz com todos os valores possiveis para cada possição. se algum array ficar vazio, dou um
+        #      um péssimo valor na heuristica porque quer dizer que o tabuleiro n tem solução
+
+        def calc_distance(value, target):
+            upper = abs(value - target)
+            value_row, value_col = node.state.board.inserted[value]
+            target_row, target_col = node.state.board.inserted[target]
+            lower = abs(value_row - target_row) + abs(value_col - target_col)
+            result = upper / lower
+            if result < 1:
+                return 10000
+            else:
+                return result
+
+        # Start of program does not need a heuristic value
+        if node.action is None:
+            return 1
+
+        # Holds heuristic termination value
+        KILLER_VALUE = 900000000000
+        FRONTIER_LEN = 100
+        IMPROVEMENT_FACTOR = 10000000
+        SINGLE_CLUSTER_FACTOR = 10000
+        SOLO_FACTOR = 500
+
+        # Unpacks action to evaluate it
+        row, col, val = node.action
+
+        # Initializes the total value with the number of remaining positions
+        total = (node.state.board.max_value - len(node.state.board.inserted))
+        if len(node.state.board.clusters) == 2:
+            total *= SINGLE_CLUSTER_FACTOR
+        else:
+            total *= IMPROVEMENT_FACTOR
+
+        # Checks if this value only has one possible coordinate or if this action merged two clusters
+        if node.parent.state.board.possibilities[val] == 1 or node.state.board.did_clusters_merge:
+            node.state.board.did_clusters_merge = False
+            return total - SOLO_FACTOR
+
+        # Now, we evaluate the state of the cluster by giving more points to smaller clusters. This allows us to better
+        # fill the "cracks" between each already placed value and once there is only a single cluster (a single path),
+        # we just need to fill the other two ends
+        if len(node.state.board.clusters) > 2:
+
+            # Checks if this action is being taken in the smallest cluster. If not, we 'butcher' this action
+            if node.state.board.clusters[val][1] - 1 <= Board.get_smallest_cluster_size(node.state.board):
+
+                # Blocks expanding the deque to the ends while there are spaces between the clusters
+                if node.parent.state.board.deque[0] - 1 == node.state.board.deque[0] \
+                        or node.parent.state.board.deque[-1] + 1 == node.state.board.deque[-1]:
+                    return KILLER_VALUE
+
+                # Check if this coordinate has only one option and if so, we give a higher priority
+                if len(node.parent.state.board.frontier[(row, col)]) == 1:
+                    return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
+
+                # Gets leftmost and rightmost index from our deque structure (related to the inserted action) to
+                # calculate the distance. This allows us to expand the board with plays that go according to a
+                # radius of possible values and by using the 'lance' nodes, we can do this expansion towards the
+                # next (lower or upper) value. We only consider actions that give distance = 1 because one of the
+                # properties of the used formula is that it only returns 1 for EXACT and CORRECT positions in a
+                # given action (only when filling 'cracks' between 2 clusters since this property is not valid
+                # for end values in the deque because they don't have a "next node" to compare with)
+                val_index = node.state.board.get_deque_index(node.state.board, val)
+                if val_index + 1 < len(node.state.board.deque):  # Calculates right 'lance'
+                    if calc_distance(val, node.state.board.deque[val_index + 1]) != 1:
+                        return KILLER_VALUE
+                if val_index - 1 >= 0:  # Calculates left 'lance'
+                    if calc_distance(val, node.state.board.deque[val_index - 1]) != 1:
+                        return KILLER_VALUE
+
+                # If everything is fine, we return the calculated value
+                return total - FRONTIER_LEN // len(node.parent.state.board.frontier[(row, col)])
+
+            else:
+                return KILLER_VALUE
+
+        else:  # In this case, we are just trying to fill the ends in the deque structure
+
+            # First thing to do is to check which side of the deque is smaller. We are going to start by filling it
+            # because, when it is done, the other side is going to be a straight path to the solution (since there are
+            # no more possible values)
+            opposite, _ = node.state.board.clusters[val]
+            if opposite > val:  # We are on the left side of the deque structure
+
+                # Counts how many positions are free in either side
+                right_side_remaining = node.state.board.max_value - opposite
+                left_side_remaining = val - 1
+
+                if left_side_remaining <= right_side_remaining or right_side_remaining == 0:  # Checks if we are using the lowest side
+
+                    # Gives a better value if this position has less possible values
+                    total += len(node.parent.state.board.frontier[(row, col)]) - (right_side_remaining + left_side_remaining)
+
+                    # We give a better value for higher distances here because we want the value to be put further
+                    # away from the other extreme
+                    if right_side_remaining != 0:
+                        total -= calc_distance(val, node.state.board.deque[-1])
+
+                    return total
+
+                else:
+                    return KILLER_VALUE
+
+            else:  # We are on the right side of the deque structure
+
+                # Counts how many positions are free in either side
+                right_side_remaining = node.state.board.max_value - val
+                left_side_remaining = opposite - 1
+
+                if right_side_remaining <= left_side_remaining or left_side_remaining == 0:  # Checks if we are using the lowest side
+
+                    # Gives a better value if this position has less possible values
+                    total += len(node.parent.state.board.frontier[(row, col)]) - (right_side_remaining + left_side_remaining)
+
+                    # We give a better value for higher distances here because we want the value to be put further
+                    # away from the other extreme
+                    if left_side_remaining != 0:
+                        total -= calc_distance(val, node.state.board.deque[0])
+
+                    return total
+
+                else:
+                    return KILLER_VALUE
 
 
 if __name__ == "__main__":
