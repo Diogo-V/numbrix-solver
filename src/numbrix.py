@@ -70,7 +70,9 @@ class Board:
             build_frontier(i, j - 1, self)
             Board.insert_deque(self, val)
 
-        self.pointer = (self.inserted[self.deque[0]][0], self.inserted[self.deque[0]][1], self.deque[0])
+        if self.deque[0] in self.clusters:
+            opposite, _ = self.clusters[self.deque[0]]
+            self.pointer = (self.inserted[opposite][0], self.inserted[opposite][1], opposite)
 
     @staticmethod
     def add_possibility(board, value):
